@@ -1,4 +1,4 @@
-module Types.Time (Time, getNow, toNumericDate) where
+module Types.Time (Time, addTime, getNow, toNumericDate) where
 
 import Control.Category ((>>>))
 import Data.Function ((&))
@@ -7,7 +7,7 @@ import Data.Morpheus.Types
     (GQLScalar(parseValue, serialize), GQLType, KIND, ScalarValue(String))
 import qualified Data.Text as Text
 import Data.Time.Calendar (Day(ModifiedJulianDay, toModifiedJulianDay))
-import Data.Time.Clock (UTCTime(UTCTime, utctDay, utctDayTime))
+import Data.Time.Clock (NominalDiffTime, UTCTime(UTCTime, utctDay, utctDayTime))
 import qualified Data.Time.Clock as Time
 import qualified Data.Time.Format.ISO8601 as TimeFormat
 import Database.SQLite.Simple.ToField (ToField(toField))
@@ -20,7 +20,12 @@ newtype Time = Time UTCTime
 
 toNumericDate :: Time -> Maybe NumericDate
 toNumericDate (Time time) =
-  (Time.diffUTCTime epoch >>> JWT.numericDate) time
+  Time.diffUTCTime time epoch
+    & JWT.numericDate
+
+addTime :: NominalDiffTime -> Time -> Time
+addTime diff (Time time) =
+  Time (Time.addUTCTime diff time)
 
 epoch :: UTCTime
 epoch = UTCTime

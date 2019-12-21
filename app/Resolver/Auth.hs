@@ -7,6 +7,7 @@ import Data.Function ((&))
 import Data.Morpheus.Types (Res)
 import qualified Data.Morpheus.Types as M
 import Data.Text (Text)
+import Data.Time.Clock (NominalDiffTime)
 import Database.SQLite.Simple (Connection)
 import GHC.Generics (Generic)
 import Polysemy (Embed, Members, Sem)
@@ -30,10 +31,10 @@ data TokenArgs = TokenArgs
   , password :: Password
   } deriving (Generic)
 
-resolveToken :: Connection -> Signer -> TokenArgs -> Res () IO Text
-resolveToken conn signer TokenArgs {email, password} =
+resolveToken :: Connection -> NominalDiffTime -> Signer -> TokenArgs -> Res () IO Text
+resolveToken conn daysLater signer TokenArgs {email, password} =
   M.liftEither $
-    token email password
+    token daysLater email password
       & CryptoHash.runCryptoHashAsArgon2
       & State.evalState signer
       & User.runUserAsSQLite
@@ -42,10 +43,11 @@ resolveToken conn signer TokenArgs {email, password} =
 
 token ::
   Members [CryptoHash, State Signer, User, Embed IO] r
-  => EmailAddress
+  => NominalDiffTime
+  -> EmailAddress
   -> Password
   -> Sem r (Either String Text)
-token email password = do
+token daysLater email password = do
   maybeUserTuple <- User.findByEmailAddress email
   case User.intoTuple <$> maybeUserTuple of
     Nothing -> pure $ Left tokenErrorMessage
@@ -56,7 +58,7 @@ token email password = do
         else do
           now <- Time.getNow
           signer <- State.get
-          pure $ Right $ User.encodeJwt now signer user
+          pure $ Right $ User.encodeJwt daysLater now signer user
 
 tokenErrorMessage :: String
 tokenErrorMessage = "Invalid user ID or password"

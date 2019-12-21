@@ -7,6 +7,7 @@ import qualified Data.Morpheus as M
 import Data.Morpheus.Types
     (GQLRootResolver(GQLRootResolver), Undefined(Undefined))
 import qualified Data.Morpheus.Types as M
+import Data.Time.Clock (NominalDiffTime)
 import Database.SQLite.Simple (Connection)
 import qualified Database.SQLite.Simple as SQLite
 import Network.HTTP.Client (Manager)
@@ -34,12 +35,13 @@ main = do
 
 gqlApi :: Connection -> Manager -> ByteString -> IO ByteString
 gqlApi conn manager =
-  M.interpreter (rootResolver conn manager $ JWT.hmacSecret "Secret")
+  -- TODO: Move daysLater and signer secret to environment variables
+  M.interpreter (rootResolver conn 7 manager $ JWT.hmacSecret "Secret")
 
-rootResolver :: Connection -> Manager -> Signer -> GQLRootResolver IO () Query Mutation Undefined
-rootResolver conn manager signer =
+rootResolver :: Connection -> NominalDiffTime -> Manager -> Signer -> GQLRootResolver IO () Query Mutation Undefined
+rootResolver conn daysLater manager signer =
   GQLRootResolver
-    { M.queryResolver = Query.query conn manager signer
+    { M.queryResolver = Query.query conn daysLater manager signer
     , M.mutationResolver = Mutation.mutation conn manager signer
     , M.subscriptionResolver = Undefined
     }

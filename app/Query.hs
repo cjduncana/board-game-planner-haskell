@@ -2,6 +2,7 @@ module Query (Query, query) where
 
 import Data.Morpheus.Types (GQLType, Res)
 import Data.Text (Text)
+import Data.Time.Clock (NominalDiffTime)
 import Database.SQLite.Simple (Connection)
 import GHC.Generics (Generic)
 import Network.HTTP.Client (Manager)
@@ -18,8 +19,8 @@ data Query m = Query
   , token :: TokenArgs -> m Text
   } deriving (Generic, GQLType)
 
-query :: Connection -> Manager -> Signer -> Query (Res () IO)
-query conn manager signer = Query
+query :: Connection -> NominalDiffTime -> Manager -> Signer -> Query (Res () IO)
+query conn daysLater manager signer = Query
   { boardGames = BoardGame.resolveBoardGames manager
-  , token = Auth.resolveToken conn signer
+  , token = Auth.resolveToken conn daysLater signer
   }

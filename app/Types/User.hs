@@ -2,12 +2,18 @@ module Types.User (User, UserTuple, create, encodeJwt, getID, intoTuple) where
 
 import Data.Morpheus.Types (GQLType, ID(unpackID))
 import Data.Text (Text)
+import Data.Time.Clock (NominalDiffTime)
+import qualified Data.Time.Clock as Clock
 import Database.SQLite.Simple (FromRow(fromRow))
 import qualified Database.SQLite.Simple as SQLite
 import GHC.Generics (Generic)
-import Prelude (Maybe(Just), mempty, ($), (<$>), (<*>))
+import Prelude (Maybe(Just), mempty, ($), (*), (<$>), (<*>))
 import Web.JWT
-    (Algorithm(HS256), JOSEHeader(alg), JWTClaimsSet(iat, iss, sub), Signer)
+    ( Algorithm(HS256)
+    , JOSEHeader(alg)
+    , JWTClaimsSet(exp, iat, iss, sub)
+    , Signer
+    )
 import qualified Web.JWT as JWT
 
 import Types.EmailAddress (EmailAddress)
@@ -45,13 +51,13 @@ intoTuple :: UserTuple -> (User, HashedPassword)
 intoTuple (UserTuple user hashedPassword) =
   (user, hashedPassword)
 
-encodeJwt :: Time -> Signer -> User -> Text
-encodeJwt now signer user =
+encodeJwt :: NominalDiffTime -> Time -> Signer -> User -> Text
+encodeJwt daysLater now signer user =
   let
     claims = mempty
       { iss = JWT.stringOrURI "board-game-planner"
       , sub = JWT.stringOrURI $ unpackID $ id user
-      -- TODO: Implement expiration date
+      , exp = Time.toNumericDate $ manyDaysLater daysLater now
       , iat = Time.toNumericDate now
       -- TODO: Implement JTI for session invalidation
       }
@@ -60,6 +66,9 @@ encodeJwt now signer user =
 
 header :: JOSEHeader
 header = mempty { alg = Just HS256 }
+
+manyDaysLater :: NominalDiffTime -> Time -> Time
+manyDaysLater daysLater = Time.addTime (daysLater * Clock.nominalDay)
 
 getID :: User -> ID
 getID = id

@@ -7,7 +7,7 @@ import Data.Text (Text)
 import Database.SQLite.Simple (Connection)
 import GHC.Generics (Generic)
 import Network.HTTP.Client (Manager)
-import Polysemy (Member, Members, Sem)
+import Polysemy (Embed, Member, Members, Sem)
 import qualified Polysemy
 import qualified Polysemy.Input as Input
 import qualified Polysemy.State as State
@@ -25,6 +25,7 @@ import Types.Event (Event)
 import Types.JWT (JWT)
 import qualified Types.JWT as JWT
 import Types.Time (Time)
+import qualified Types.Time as Time
 import Types.User (User)
 import qualified Types.User as User
 import qualified Types.UUID as UUID
@@ -50,15 +51,16 @@ resolveCreateEvent conn manager signer CreateEventArgs {token, startTime, latitu
       & Polysemy.runM
 
 createEvent ::
-  Members [BoardGameGeek, Effects.Event, Effects.User.User] r
+  Members [Embed IO, BoardGameGeek, Effects.Event, Effects.User.User] r
   => Signer
   -> Text
   -> Time
   -> Coordinate
   -> [ID]
   -> Sem r (Either String Event)
-createEvent signer encodedToken startTime location gameIDs =
-  case JWT.decodeAndVerify signer encodedToken of
+createEvent signer encodedToken startTime location gameIDs = do
+  now <- Time.getNow
+  case JWT.decodeAndVerify signer now encodedToken of
     Left jwtError -> pure $ Left $ show jwtError
     Right jwt -> do
       maybeUser <- findUser jwt
