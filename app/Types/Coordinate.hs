@@ -2,7 +2,7 @@ module Types.Coordinate (Coordinate, getLatitude, getLongitude) where
 
 import Control.Category ((>>>))
 import qualified Data.Text as Text
-import Database.SQLite.Simple (SQLData(SQLText))
+import Database.SQLite.Simple (SQLData(SQLFloat))
 import Database.SQLite.Simple.ToField (ToField(toField))
 
 newtype Latitude = Latitude Double deriving (Eq, Show, Ord)
@@ -16,9 +16,8 @@ instance Num Latitude where
     signum (Latitude x) = Latitude $ signum x
     fromInteger = fromInteger >>> mkLat
 
--- TODO: Investigate another Database representation besides Text
 instance ToField Latitude where
-  toField = show >>> Text.pack >>> SQLText
+  toField (Latitude value) = SQLFloat value
 
 newtype Longitude = Longitude Double deriving (Eq, Show, Ord)
 
@@ -31,9 +30,8 @@ instance Num Longitude where
     signum (Longitude x) = Longitude $ signum x
     fromInteger = fromInteger >>> mkLong
 
--- TODO: Investigate another Database representation besides Text
 instance ToField Longitude where
-  toField = show >>> Text.pack >>> SQLText
+  toField (Longitude value) = SQLFloat value
 
 data Coordinate = Coordinate
   { latitude :: Latitude

@@ -40,9 +40,8 @@ createEventsTable conn =
                     , "( id TEXT PRIMARY KEY NOT NULL"
                     , ", creatorId TEXT NOT NULL"
                     , ", startTime TEXT NOT NULL"
-                    -- TODO: Investigate another Database representation besides Text
-                    , ", latitude TEXT NOT NULL"
-                    , ", longitude TEXT NOT NULL"
+                    , ", latitude FLOAT NOT NULL"
+                    , ", longitude FLOAT NOT NULL"
                     , ", createdAt TEXT NOT NULL"
                     , ", updatedAt TEXT NOT NULL"
                     , ") WITHOUT ROWID"
