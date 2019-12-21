@@ -40,6 +40,6 @@ rootResolver :: Connection -> Manager -> Signer -> GQLRootResolver IO () Query M
 rootResolver conn manager signer =
   GQLRootResolver
     { M.queryResolver = Query.query conn manager signer
-    , M.mutationResolver = Mutation.mutation conn
+    , M.mutationResolver = Mutation.mutation conn manager signer
     , M.subscriptionResolver = Undefined
     }

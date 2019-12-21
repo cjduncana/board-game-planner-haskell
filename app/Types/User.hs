@@ -2,7 +2,6 @@ module Types.User (User, UserTuple, create, encodeJwt, getID, intoTuple) where
 
 import Data.Morpheus.Types (GQLType, ID(unpackID))
 import Data.Text (Text)
-import Data.Time.Clock (UTCTime)
 import Database.SQLite.Simple (FromRow(fromRow))
 import qualified Database.SQLite.Simple as SQLite
 import GHC.Generics (Generic)
@@ -14,7 +13,8 @@ import qualified Web.JWT as JWT
 import Types.EmailAddress (EmailAddress)
 import Types.HashedPassword (HashedPassword)
 import Types.NonEmptyText (NonEmptyText)
-import qualified Types.UTC as UTC
+import Types.Time (Time)
+import qualified Types.Time as Time
 import Types.UUID (UUID)
 import qualified Types.UUID as UUID
 
@@ -45,14 +45,14 @@ intoTuple :: UserTuple -> (User, HashedPassword)
 intoTuple (UserTuple user hashedPassword) =
   (user, hashedPassword)
 
-encodeJwt :: UTCTime -> Signer -> User -> Text
+encodeJwt :: Time -> Signer -> User -> Text
 encodeJwt now signer user =
   let
     claims = mempty
       { iss = JWT.stringOrURI "board-game-planner"
       , sub = JWT.stringOrURI $ unpackID $ id user
       -- TODO: Implement expiration date
-      , iat = UTC.toNumericDate now
+      , iat = Time.toNumericDate now
       -- TODO: Implement JTI for session invalidation
       }
   in

@@ -7,7 +7,6 @@ import Data.Function ((&))
 import Data.Morpheus.Types (Res)
 import qualified Data.Morpheus.Types as M
 import Data.Text (Text)
-import qualified Data.Time.Clock as Time
 import Database.SQLite.Simple (Connection)
 import GHC.Generics (Generic)
 import Polysemy (Embed, Members, Sem)
@@ -23,6 +22,7 @@ import Effects.User (User)
 import qualified Effects.User as User
 import Types.EmailAddress (EmailAddress)
 import Types.Password (Password)
+import qualified Types.Time as Time
 import qualified Types.User as User
 
 data TokenArgs = TokenArgs
@@ -54,7 +54,7 @@ token email password = do
       if not isValid
         then pure $ Left tokenErrorMessage
         else do
-          now <- Polysemy.embed Time.getCurrentTime
+          now <- Time.getNow
           signer <- State.get
           pure $ Right $ User.encodeJwt now signer user
 
