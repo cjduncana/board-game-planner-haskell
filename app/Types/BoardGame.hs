@@ -1,8 +1,9 @@
-module Types.BoardGame (BoardGame) where
+module Types.BoardGame (BoardGame, getID) where
 
 import qualified Data.Map.Lazy as Map
 import Data.Morpheus.Types (GQLType, ID(ID))
 import GHC.Generics (Generic)
+import Prelude (Bool(False), maybe, (&&), (<$>), (<*>), (==))
 import Text.XML (Element(Element), Node(NodeElement))
 import Text.XML.Decode.DecodeCursor (DecodeCursor)
 import qualified Text.XML.Decode.DecodeCursor as DecodeCursor
@@ -24,6 +25,9 @@ data BoardGame = BoardGame
   , thumbnailUrl :: NonEmptyText
   , imageUrl :: NonEmptyText
   } deriving (Generic, GQLType)
+
+getID :: BoardGame -> ID
+getID = id
 
 instance DecodeCursor BoardGame where
   decode cursor =

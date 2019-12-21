@@ -20,31 +20,49 @@ createUsersTable :: Connection -> IO ()
 createUsersTable conn =
   SQLite.execute_ conn query
   where
-    query = mconcat [ "CREATE TABLE IF NOT EXISTS users"
-                    , " "
-                    , "( id TEXT PRIMARY KEY NOT NULL"
-                    , ", name TEXT NOT NULL"
-                    , ", email TEXT NOT NULL UNIQUE"
-                    , ", hashedPassword TEXT NOT NULL"
-                    , ", createdAt TEXT NOT NULL"
-                    , ", updatedAt TEXT NOT NULL"
-                    , ") WITHOUT ROWID"
-                    ]
+    query = mconcat
+      [ "CREATE TABLE IF NOT EXISTS users"
+      , " "
+      , "( id TEXT PRIMARY KEY NOT NULL"
+      , ", name TEXT NOT NULL"
+      , ", email TEXT NOT NULL UNIQUE"
+      , ", hashedPassword TEXT NOT NULL"
+      , ", createdAt TEXT NOT NULL"
+      , ", updatedAt TEXT NOT NULL"
+      , ") WITHOUT ROWID"
+      ]
 
 createEventsTable :: Connection -> IO ()
 createEventsTable conn =
-  SQLite.execute_ conn query
+  [eventsQuery, eventsPlayersQuery, eventsGamesQuery]
+    & fmap (SQLite.execute_ conn)
+    & mconcat
   where
-    query = mconcat [ "CREATE TABLE IF NOT EXISTS events"
-                    , " "
-                    , "( id TEXT PRIMARY KEY NOT NULL"
-                    , ", creatorId TEXT NOT NULL"
-                    , ", startTime TEXT NOT NULL"
-                    , ", latitude FLOAT NOT NULL"
-                    , ", longitude FLOAT NOT NULL"
-                    , ", createdAt TEXT NOT NULL"
-                    , ", updatedAt TEXT NOT NULL"
-                    , ") WITHOUT ROWID"
-                    ]
+    eventsQuery = mconcat
+      [ "CREATE TABLE IF NOT EXISTS events"
+      , " "
+      , "( id TEXT PRIMARY KEY NOT NULL"
+      , ", creatorId TEXT NOT NULL"
+      , ", startTime TEXT NOT NULL"
+      , ", latitude FLOAT NOT NULL"
+      , ", longitude FLOAT NOT NULL"
+      , ", createdAt TEXT NOT NULL"
+      , ", updatedAt TEXT NOT NULL"
+      , ") WITHOUT ROWID"
+      ]
 
--- TODO: Tie players and games to events
+    eventsPlayersQuery = mconcat
+      [ "CREATE TABLE IF NOT EXISTS eventsPlayers"
+      , " "
+      , "( eventId TEXT NOT NULL"
+      , ", playerId TEXT NOT NULL"
+      , ")"
+      ]
+
+    eventsGamesQuery = mconcat
+      [ "CREATE TABLE IF NOT EXISTS eventsGames"
+      , " "
+      , "( eventId TEXT NOT NULL"
+      , ", gameId TEXT NOT NULL"
+      , ")"
+      ]
