@@ -63,6 +63,6 @@ createEventsTable conn =
       [ "CREATE TABLE IF NOT EXISTS eventsGames"
       , " "
       , "( eventId TEXT NOT NULL"
-      , ", gameId TEXT NOT NULL"
+      , ", gameId INTEGER NOT NULL"
       , ")"
       ]

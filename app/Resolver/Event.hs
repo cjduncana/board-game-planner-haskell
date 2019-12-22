@@ -1,7 +1,7 @@
 module Resolver.Event (CreateEventArgs, resolveCreateEvent) where
 
 import Data.Function ((&))
-import Data.Morpheus.Types (ID(unpackID), MutRes)
+import Data.Morpheus.Types (MutRes)
 import qualified Data.Morpheus.Types as M
 import Data.Text (Text)
 import Database.SQLite.Simple (Connection)
@@ -18,7 +18,7 @@ import Effects.BoardGameGeek (BoardGameGeek)
 import qualified Effects.BoardGameGeek as BoardGameGeek
 import qualified Effects.Event as Effects
 import qualified Effects.User
-import Types.BoardGame (BoardGame)
+import Types.BoardGame (BoardGame, BoardGameID)
 import Types.Coordinate (Coordinate, Latitude, Longitude)
 import qualified Types.Coordinate as Coordinate
 import Types.Event (Event)
@@ -35,7 +35,7 @@ data CreateEventArgs = CreateEventArgs
   , startTime :: Time
   , latitude :: Latitude
   , longitude :: Longitude
-  , gameIDs :: [ID]
+  , gameIDs :: [BoardGameID]
   } deriving (Generic)
 
 resolveCreateEvent :: Connection -> Manager -> Signer -> CreateEventArgs -> MutRes () IO Event
@@ -56,7 +56,7 @@ createEvent ::
   -> Text
   -> Time
   -> Coordinate
-  -> [ID]
+  -> [BoardGameID]
   -> Sem r (Either String Event)
 createEvent signer encodedToken startTime location gameIDs = do
   now <- Time.getNow
@@ -87,15 +87,12 @@ findUser jwt =
         & fmap JWT.stringOrURIToText
         & (=<<) UUID.fromText
 
-findGames :: Member BoardGameGeek r => [ID] -> Sem r (Maybe [BoardGame])
+findGames :: Member BoardGameGeek r => [BoardGameID] -> Sem r (Maybe [BoardGame])
 findGames gameIDs =
-  case sequence (BoardGameGeek.mkBoardGameID . unpackID <$> gameIDs) of
-    Nothing -> pure Nothing
-    Just boardGameIDs ->
-      BoardGameGeek.getBoardGames boardGameIDs
-        & fmap (allGamesExists gameIDs)
+  BoardGameGeek.getBoardGames gameIDs
+    & fmap (allGamesExists gameIDs)
 
-allGamesExists :: [ID] -> [BoardGame] -> Maybe [BoardGame]
+allGamesExists :: [id] -> [BoardGame] -> Maybe [BoardGame]
 allGamesExists gameIDs boardGames =
   if length gameIDs /= length boardGames
     then Nothing

@@ -9,7 +9,35 @@ import Database.SQLite.Simple (SQLData(SQLFloat))
 import Database.SQLite.Simple.ToField (ToField(toField))
 import GHC.Generics (Generic)
 
+data Coordinate = Coordinate
+  { latitude :: Latitude
+  , longitude :: Longitude
+  } deriving (Generic, GQLType)
+
 newtype Latitude = Latitude Double deriving (Eq, Show, Ord)
+
+newtype Longitude = Longitude Double deriving (Eq, Show, Ord)
+
+getLatitude :: Coordinate -> Latitude
+getLatitude = latitude
+
+getLongitude :: Coordinate -> Longitude
+getLongitude = longitude
+
+normalize :: Double -> Double -> Double
+normalize upperBound x
+    | x > upperBound = normalize upperBound $ x - upperBound
+    | x < -upperBound = normalize upperBound $ x + upperBound
+    | otherwise = x
+
+mkCoordinate :: Latitude -> Longitude -> Coordinate
+mkCoordinate = Coordinate
+
+mkLat :: Double -> Latitude
+mkLat = normalize 90 >>> Latitude
+
+mkLong :: Double -> Longitude
+mkLong = normalize 180 >>> Longitude
 
 instance GQLScalar Latitude where
   parseValue (Float value) =
@@ -36,8 +64,6 @@ instance Num Latitude where
 instance ToField Latitude where
   toField (Latitude value) = SQLFloat value
 
-newtype Longitude = Longitude Double deriving (Eq, Show, Ord)
-
 instance GQLScalar Longitude where
   parseValue (Float value) =
     realToFrac value
@@ -62,29 +88,3 @@ instance Num Longitude where
 
 instance ToField Longitude where
   toField (Longitude value) = SQLFloat value
-
-data Coordinate = Coordinate
-  { latitude :: Latitude
-  , longitude :: Longitude
-  } deriving (Generic, GQLType)
-
-getLatitude :: Coordinate -> Latitude
-getLatitude = latitude
-
-getLongitude :: Coordinate -> Longitude
-getLongitude = longitude
-
-normalize :: Double -> Double -> Double
-normalize upperBound x
-    | x > upperBound = normalize upperBound $ x - upperBound
-    | x < -upperBound = normalize upperBound $ x + upperBound
-    | otherwise = x
-
-mkCoordinate :: Latitude -> Longitude -> Coordinate
-mkCoordinate = Coordinate
-
-mkLat :: Double -> Latitude
-mkLat = normalize 90 >>> Latitude
-
-mkLong :: Double -> Longitude
-mkLong = normalize 180 >>> Longitude

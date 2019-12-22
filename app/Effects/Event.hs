@@ -6,7 +6,6 @@ module Effects.Event
 
 import Control.Category ((>>>))
 import Data.Function ((&))
-import Data.Morpheus.Types (ID(unpackID))
 import qualified Data.Time.Clock as Time
 import Database.SQLite.Simple (Connection, NamedParam((:=)), Query)
 import qualified Database.SQLite.Simple as SQLite
@@ -58,7 +57,7 @@ runEventAsSQLite = Polysemy.reinterpret $ \case
 
       eventsParams id now =
         [ ":id" := id
-        , ":creatorId" := (User.getID >>> unpackID) creator
+        , ":creatorId" := User.getID creator
         , ":startTime" := startTime
         , ":latitude" := Coordinate.getLatitude location
         , ":longitude" := Coordinate.getLongitude location
@@ -77,7 +76,7 @@ runEventAsSQLite = Polysemy.reinterpret $ \case
       eventsPlayersParams :: UUID -> [NamedParam]
       eventsPlayersParams eventId =
         [ ":eventId" := eventId
-        , ":playerId" := (User.getID >>> unpackID) creator
+        , ":playerId" := User.getID creator
         ]
 
       eventsGamesQuery = mconcat
@@ -91,7 +90,7 @@ runEventAsSQLite = Polysemy.reinterpret $ \case
       eventsGamesParams :: UUID -> BoardGame -> [NamedParam]
       eventsGamesParams eventId boardGame =
         [ ":eventId" := eventId
-        , ":gameId" := (BoardGame.getID >>> unpackID) boardGame
+        , ":gameId" := BoardGame.getID boardGame
         ]
 
 eventsTable :: Query

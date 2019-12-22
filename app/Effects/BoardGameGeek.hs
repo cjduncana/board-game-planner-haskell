@@ -1,7 +1,6 @@
 module Effects.BoardGameGeek
   ( BoardGameGeek
   , getBoardGames
-  , mkBoardGameID
   , runBoardGameGeek
   , searchBoardGameIDsByQuery
   ) where
@@ -11,7 +10,6 @@ import qualified Data.ByteString.Char8 as Char8
 import Data.ByteString.Lazy (ByteString)
 import Data.Function ((&))
 import qualified Data.List as List
-import Data.Text (Text)
 import qualified Data.Text.Encoding as Encoding
 import qualified Data.Text.Lazy.Encoding as LazyText
 import Network.HTTP.Client (Manager, Request(host, path, port, secure))
@@ -23,9 +21,8 @@ import qualified Polysemy.State as State
 import Prelude
     ( Bool(True)
     , IO
-    , Maybe(Just, Nothing)
+    , Maybe(Just)
     , Show(show)
-    , const
     , either
     , error
     , pure
@@ -39,13 +36,9 @@ import qualified Text.XML.Decode.DecodeCursor as DecodeCursor
 import Text.XML.Decode.HCursor (HCursor, (%/))
 import qualified Text.XML.Decode.HCursor as HCursor
 
-import Types.BoardGame (BoardGame)
+import Types.BoardGame (BoardGame, BoardGameID)
 import Types.NonEmptyText (NonEmptyText)
 import qualified Types.NonEmptyText as NonEmptyText
-import Types.PositiveInteger (PositiveInteger)
-import qualified Types.PositiveInteger as PositiveInteger
-
-newtype BoardGameID = BoardGameID PositiveInteger
 
 data BoardGameGeek m a where
   -- Search for board game IDs by a query
@@ -116,16 +109,3 @@ getBoardGamesRequest boardGameIds =
         , path = "/xmlapi2/thing"
         }
     queries = [("id", Just ids)]
-
-instance Show BoardGameID where
-  show (BoardGameID id) = show id
-
-instance DecodeCursor BoardGameID where
-  decode cursor =
-    BoardGameID <$>
-      DecodeCursor.decodeAttr "id" PositiveInteger.fromText cursor
-
-mkBoardGameID :: Text -> Maybe BoardGameID
-mkBoardGameID =
-  PositiveInteger.fromText
-    >>> either (const Nothing) (BoardGameID >>> Just)
