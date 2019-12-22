@@ -13,9 +13,10 @@ import qualified Database.SQLite.Simple as SQLite
 import Network.HTTP.Client (Manager)
 import qualified Network.HTTP.Client.TLS as TLS
 import Web.JWT (Signer)
-import qualified Web.JWT as JWT
 import qualified Web.Scotty as S
 
+import Environment (Environment)
+import qualified Environment as Env
 import qualified Migration
 import Mutation (Mutation)
 import qualified Mutation
@@ -25,18 +26,20 @@ import qualified Query
 main :: IO ()
 main = do
   manager <- TLS.newTlsManager
-  SQLite.withConnection "sqlite.db" $ \conn -> do
+  env <- Env.getEnvironment
+  SQLite.withConnection (Env.sqliteDatabaseName env) $ \conn -> do
     Migration.run conn
     S.scotty 3000 $
       S.post "/api" $ do
         body <- S.body
-        response <- Monad.liftIO $ gqlApi conn manager $ LazyByteString.toStrict body
+        response <- Monad.liftIO $ gqlApi conn env manager $ LazyByteString.toStrict body
         S.raw $ LazyByteString.fromStrict response
 
-gqlApi :: Connection -> Manager -> ByteString -> IO ByteString
-gqlApi conn manager =
-  -- TODO: Move daysLater and signer secret to environment variables
-  M.interpreter (rootResolver conn 7 manager $ JWT.hmacSecret "Secret")
+gqlApi :: Connection -> Environment -> Manager -> ByteString -> IO ByteString
+gqlApi conn env manager =
+  M.interpreter $
+    rootResolver conn (Env.expireDaysLater env) manager $
+      Env.jwtSigner env
 
 rootResolver :: Connection -> NominalDiffTime -> Manager -> Signer -> GQLRootResolver IO () Query Mutation Undefined
 rootResolver conn daysLater manager signer =

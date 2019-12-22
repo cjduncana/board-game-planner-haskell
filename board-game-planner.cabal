@@ -59,6 +59,7 @@ executable board-game-planner-exe
                , Effects.CryptoHash
                , Effects.Event
                , Effects.User
+               , Environment
                , Migration
                , Mutation
                , Query
