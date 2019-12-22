@@ -1,1 +1,1 @@
-# board-game-planner
+# Board Game Planner
