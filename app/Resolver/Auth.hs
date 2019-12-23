@@ -49,7 +49,7 @@ token ::
   -> Sem r (Either String Text)
 token daysLater email password = do
   maybeUserTuple <- User.findByEmailAddress email
-  case User.intoTuple <$> maybeUserTuple of
+  case maybeUserTuple of
     Nothing -> pure $ Left tokenErrorMessage
     Just (user, hashedPassword) -> do
       isValid <- CryptoHash.validateHash hashedPassword password

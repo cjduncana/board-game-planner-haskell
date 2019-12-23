@@ -1,23 +1,38 @@
-module Types.User (User, UserTuple, create, encodeJwt, getID, intoTuple) where
+module Types.User
+  ( User
+  , UserID
+  , encodeJwt
+  , findOne
+  , getID
+  , getUserIDFromJWT
+  , newUser
+  ) where
 
 import Control.Category ((>>>))
+import qualified Data.Maybe as Maybe
 import Data.Morpheus.Kind (SCALAR)
 import Data.Morpheus.Types
     (GQLScalar(parseValue, serialize), GQLType, KIND, ScalarValue(String))
 import Data.Text (Text)
 import Data.Time.Clock (NominalDiffTime)
 import qualified Data.Time.Clock as Clock
-import Database.SQLite.Simple (FromRow(fromRow))
+import Database.SQLite.Simple (Connection, NamedParam, Query)
 import qualified Database.SQLite.Simple as SQLite
+import Database.SQLite.Simple.FromField (FromField(fromField))
 import Database.SQLite.Simple.ToField (ToField(toField))
 import GHC.Generics (Generic)
+import Polysemy (Embed, Member, Sem)
+import qualified Polysemy
 import Prelude
-    (Either(Left, Right), Maybe(Just), maybe, mempty, ($), (*), (<$>), (<*>))
+    (Either(Left, Right), IO, Maybe(Just), ($), (*), (<$>), (<*>), (=<<))
+import qualified Prelude
 import Web.JWT
     ( Algorithm(HS256)
     , JOSEHeader(alg)
+    , JWT
     , JWTClaimsSet(exp, iat, iss, sub)
     , Signer
+    , VerifiedJWT
     )
 import qualified Web.JWT as JWT
 
@@ -40,29 +55,28 @@ data User = User
 getID :: User -> UserID
 getID = id
 
-data UserTuple = UserTuple User HashedPassword
-
-create :: UUID -> NonEmptyText -> EmailAddress -> User
-create uuid name email =
+newUser :: Member (Embed IO) r => NonEmptyText -> EmailAddress -> Sem r User
+newUser name email =
   User
-    { id = UserID uuid
-    , name = name
-    , email = email
-    }
+    <$> (UserID <$> UUID.randomUUID)
+    <*> Prelude.pure name
+    <*> Prelude.pure email
 
-createUserTuple :: UUID -> NonEmptyText -> EmailAddress -> HashedPassword -> UserTuple
-createUserTuple id name email = UserTuple (create id name email)
+findOne :: Member (Embed IO) r => Connection -> Query -> [NamedParam] -> Sem r (Maybe (User, HashedPassword))
+findOne conn query params =
+  Polysemy.embed $ do
+      results <- SQLite.queryNamed conn query params
+      Prelude.pure (createUserTuple <$> Maybe.listToMaybe results)
 
-intoTuple :: UserTuple -> (User, HashedPassword)
-intoTuple (UserTuple user hashedPassword) =
-  (user, hashedPassword)
+createUserTuple :: (UserID, NonEmptyText, EmailAddress, HashedPassword) -> (User, HashedPassword)
+createUserTuple (id, name, email, hashedPassword) = (User id name email, hashedPassword)
 
 encodeJwt :: NominalDiffTime -> Time -> Signer -> User -> Text
 encodeJwt daysLater now signer user =
   JWT.encodeSigned signer header claims
   where
     (UserID uuid) = id user
-    claims = mempty
+    claims = Prelude.mempty
       { iss = JWT.stringOrURI "board-game-planner"
       , sub = JWT.stringOrURI $ UUID.toText uuid
       , exp = Time.toNumericDate $ manyDaysLater daysLater now
@@ -70,15 +84,29 @@ encodeJwt daysLater now signer user =
       -- TODO: Implement JTI for session invalidation
       }
 
+getUserIDFromJWT :: JWT VerifiedJWT -> Maybe UserID
+getUserIDFromJWT =
+  JWT.claims
+    >>> JWT.sub
+    >>> (<$>) JWT.stringOrURIToText
+    >>> (=<<) UUID.fromText
+    >>> (<$>) UserID
+
 header :: JOSEHeader
-header = mempty { alg = Just HS256 }
+header = Prelude.mempty { alg = Just HS256 }
 
 manyDaysLater :: NominalDiffTime -> Time -> Time
 manyDaysLater daysLater = Time.addTime (daysLater * Clock.nominalDay)
 
+instance FromField UserID where
+  fromField field = UserID <$> fromField field
+
 instance GQLScalar UserID where
   parseValue (String value) =
-    maybe (Left "Value should be a UUID") (UserID >>> Right) (UUID.fromText value)
+    Prelude.maybe
+      (Left "Value should be a UUID")
+      (UserID >>> Right)
+      (UUID.fromText value)
   parseValue _ = Left "Value should be of type String"
   serialize (UserID id) = String $ UUID.toText id
 
@@ -87,7 +115,3 @@ instance GQLType UserID where
 
 instance ToField UserID where
   toField (UserID id) = toField id
-
-instance FromRow UserTuple where
-  fromRow =
-    createUserTuple <$> SQLite.field <*> SQLite.field <*> SQLite.field <*> SQLite.field

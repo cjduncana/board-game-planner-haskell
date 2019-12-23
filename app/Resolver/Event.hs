@@ -12,7 +12,6 @@ import qualified Polysemy
 import qualified Polysemy.Input as Input
 import qualified Polysemy.State as State
 import Web.JWT (Signer)
-import qualified Web.JWT as JWT
 
 import Effects.BoardGameGeek (BoardGameGeek)
 import qualified Effects.BoardGameGeek as BoardGameGeek
@@ -28,7 +27,6 @@ import Types.Time (Time)
 import qualified Types.Time as Time
 import Types.User (User)
 import qualified Types.User as User
-import qualified Types.UUID as UUID
 
 data CreateEventArgs = CreateEventArgs
   { token :: Text
@@ -75,17 +73,9 @@ createEvent signer encodedToken startTime location gameIDs = do
 
 findUser :: Member Effects.User.User r => JWT -> Sem r (Maybe User)
 findUser jwt =
-  case maybeUUID of
+  case User.getUserIDFromJWT jwt of
     Nothing -> pure Nothing
-    Just userID -> do
-      maybeUser <- Effects.User.find userID
-      pure (fst . User.intoTuple <$> maybeUser)
-  where
-    maybeUUID =
-      JWT.claims jwt
-        & JWT.sub
-        & fmap JWT.stringOrURIToText
-        & (=<<) UUID.fromText
+    Just userID -> Effects.User.findOne userID
 
 findGames :: Member BoardGameGeek r => [BoardGameID] -> Sem r (Maybe [BoardGame])
 findGames gameIDs =
