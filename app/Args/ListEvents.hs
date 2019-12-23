@@ -5,10 +5,12 @@ module Args.ListEvents
   , byLocationArgs
   , byPlayerIDs
   , startAfter
+  , token
   ) where
 
 import Data.Morpheus.Kind (INPUT)
 import Data.Morpheus.Types (GQLType, KIND)
+import Data.Text (Text)
 import GHC.Generics (Generic)
 
 import Types.BoardGame (BoardGameID)
@@ -19,7 +21,8 @@ import Types.User (UserID)
 -- TODO: Replace [a] with NonEmpty a
 -- https://github.com/morpheusgraphql/morpheus-graphql/issues/341
 data ListEventsArgs = ListEventsArgs
-  { startAfter :: Time
+  { token :: Text
+  , startAfter :: Time
   , byGameIDs :: Maybe [BoardGameID]
   , byPlayerIDs :: Maybe [UserID]
   , byLocationArgs :: Maybe ByLocationArgs

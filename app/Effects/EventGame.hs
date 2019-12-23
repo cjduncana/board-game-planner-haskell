@@ -16,12 +16,13 @@ import Polysemy (Embed, Member, Sem)
 import qualified Polysemy
 import Polysemy.Input (Input)
 import qualified Polysemy.Input as Input
-import Prelude (IO, Maybe(Just, Nothing), String, ($), (<$>), (<>))
+import Prelude (IO, Maybe(Just, Nothing), ($), (<$>), (<>))
 import qualified Prelude
 
 import Types.BoardGame (BoardGame, BoardGameID)
 import qualified Types.BoardGame as BoardGame
 import Types.EventID (EventID)
+import qualified Types.UUID as UUID
 
 data EventGame m a where
   -- Tie several Board Games to an Event
@@ -58,7 +59,7 @@ runEventGameAsSQLite = Polysemy.reinterpret $ \case
 
   List eventIDs -> do
     conn <- Input.input
-    Polysemy.embed (groupGameIDsByEventID <$> SQLite.queryNamed conn query params)
+    Polysemy.embed (groupGameIDsByEventID <$> SQLite.query_ conn query)
 
     where
       query = Prelude.mconcat
@@ -66,14 +67,8 @@ runEventGameAsSQLite = Polysemy.reinterpret $ \case
         , " "
         , "FROM " <> eventsGamesTable
         , " "
-        , "WHERE eventID IN (:eventIDs)"
+        , "WHERE eventID IN (" <> UUID.idsToQuery eventIDs <> ")"
         ]
-      params = [ ":eventIDs" := eventIDsParam ]
-
-      eventIDsParam :: String
-      eventIDsParam =
-        Prelude.show <$> eventIDs
-          & List.intercalate ", "
 
 eventsGamesTable :: Query
 eventsGamesTable = "eventsGames"

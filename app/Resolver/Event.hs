@@ -6,6 +6,7 @@ module Resolver.Event
 
 import Control.Category ((>>>))
 import Data.Function ((&))
+import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Morpheus.Types (MutRes, Res)
 import qualified Data.Morpheus.Types as M
@@ -15,13 +16,12 @@ import GHC.Generics (Generic)
 import Network.HTTP.Client (Manager)
 import Polysemy (Embed, Member, Members, Sem)
 import qualified Polysemy
-import qualified Polysemy.Embed as Embed
 import qualified Polysemy.Input as Input
 import Polysemy.State (State)
 import qualified Polysemy.State as State
 import Web.JWT (Signer)
 
-import Args.ListEvents (ListEventsArgs)
+import Args.ListEvents (ByLocationArgs, ListEventsArgs)
 import qualified Args.ListEvents as ListEvents
 import Effects.BoardGameGeek (BoardGameGeek)
 import qualified Effects.BoardGameGeek as BoardGameGeek
@@ -38,8 +38,7 @@ import Types.Event (Event)
 import Types.JWT (JWT)
 import qualified Types.JWT as JWT
 import Types.Time (Time)
-import qualified Types.Time as Time
-import Types.User (User)
+import Types.User (User, UserID)
 import qualified Types.User as User
 
 data CreateEventArgs = CreateEventArgs
@@ -58,18 +57,19 @@ resolveCreateEvent conn manager signer CreateEventArgs {token, startTime, latitu
       & State.evalState manager
       & Polysemy.runM
 
--- Add token validation
-resolveEvents :: Connection -> Manager -> ListEventsArgs -> Res () IO [Event]
-resolveEvents conn manager args =
-  Effects.list
-    (ListEvents.startAfter args)
-    (NonEmpty.nonEmpty =<< ListEvents.byGameIDs args)
-    (NonEmpty.nonEmpty =<< ListEvents.byPlayerIDs args)
-    (ListEvents.byLocationArgs args)
-      & runEventResolvers conn
-      & State.evalState manager
-      & Embed.runEmbedded M.lift
-      & Polysemy.runM
+resolveEvents :: Connection -> Manager -> Signer -> ListEventsArgs -> Res () IO [Event]
+resolveEvents conn manager signer args =
+  M.liftEither $
+    listEvents
+      signer
+      (ListEvents.token args)
+      (ListEvents.startAfter args)
+      (NonEmpty.nonEmpty =<< ListEvents.byGameIDs args)
+      (NonEmpty.nonEmpty =<< ListEvents.byPlayerIDs args)
+      (ListEvents.byLocationArgs args)
+        & runEventResolvers conn
+        & State.evalState manager
+        & Polysemy.runM
 
 createEvent ::
   Members [Embed IO, BoardGameGeek, Effects.Event, Effects.User.User] r
@@ -79,20 +79,30 @@ createEvent ::
   -> Coordinate
   -> [BoardGameID]
   -> Sem r (Either String Event)
-createEvent signer encodedToken startTime location gameIDs = do
-  now <- Time.getNow
-  case JWT.decodeAndVerify signer now encodedToken of
-    Left jwtError -> pure $ Left $ show jwtError
-    Right jwt -> do
-      maybeUser <- findUser jwt
-      case maybeUser of
-        Nothing -> pure $ Left "User not found"
-        Just user -> do
-          maybeBoardGames <- findGames gameIDs
-          case maybeBoardGames of
-            Nothing -> pure $ Left "Board Games not found"
-            Just boardGames ->
-              Right <$> Effects.create user startTime location boardGames
+createEvent signer encodedToken startTime location gameIDs =
+  JWT.use signer encodedToken $ \jwt -> do
+    maybeUser <- findUser jwt
+    case maybeUser of
+      Nothing -> pure $ Left "User not found"
+      Just user -> do
+        maybeBoardGames <- findGames gameIDs
+        case maybeBoardGames of
+          Nothing -> pure $ Left "Board Games not found"
+          Just boardGames ->
+            Right <$> Effects.create user startTime location boardGames
+
+listEvents ::
+  Members [Embed IO, Effects.Event] r
+  => Signer
+  -> Text
+  -> Time
+  -> Maybe (NonEmpty BoardGameID)
+  -> Maybe (NonEmpty UserID)
+  -> Maybe ByLocationArgs
+  -> Sem r (Either String [Event])
+listEvents signer encodedToken startAfter byGameIDs byPlayerIDs byLocationArgs =
+  JWT.use signer encodedToken $ \_ ->
+    Right <$> Effects.list startAfter byGameIDs byPlayerIDs byLocationArgs
 
 findUser :: Member Effects.User.User r => JWT -> Sem r (Maybe User)
 findUser jwt =

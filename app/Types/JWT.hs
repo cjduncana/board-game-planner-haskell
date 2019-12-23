@@ -1,9 +1,10 @@
-module Types.JWT (JWT, decodeAndVerify) where
+module Types.JWT (JWT, use) where
 
 import Control.Category ((>>>))
 import Data.Function ((&))
 import Data.Maybe as Maybe
 import Data.Text (Text)
+import Polysemy (Embed, Member, Sem)
 import qualified Web.JWT as Web
 
 import Types.Time (Time)
@@ -20,6 +21,17 @@ instance Show JWTError where
   show Missing = "Missing credentials"
   show Expired = "Expired credentials"
   show Invalid = "Invalid credentials"
+
+use ::
+  Member (Embed IO) r
+  => Web.Signer
+  -> Text
+  -> (JWT -> Sem r (Either String a))
+  -> Sem r (Either String a)
+use signer encodedToken fn = do
+  now <- Time.getNow
+  decodeAndVerify signer now encodedToken
+    & either (show >>> Left >>> pure) fn
 
 decodeAndVerify :: Web.Signer -> Time -> Text -> Either JWTError JWT
 decodeAndVerify signer now encodedToken = do

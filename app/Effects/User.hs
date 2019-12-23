@@ -8,8 +8,6 @@ module Effects.User
   ) where
 
 import qualified Control.Exception as Exception
-import Data.Function ((&))
-import qualified Data.List as List
 import qualified Data.Time.Clock as Time
 import Database.SQLite.Simple
     (Connection, Error(ErrorConstraint), NamedParam((:=)), Query, SQLError)
@@ -18,13 +16,14 @@ import Polysemy (Embed, Member, Sem)
 import qualified Polysemy
 import Polysemy.Input (Input)
 import qualified Polysemy.Input as Input
-import Prelude (Either, IO, Maybe(Just, Nothing), String, ($), (<$>), (<>))
+import Prelude (Either, IO, Maybe(Just, Nothing), ($), (<>))
 import qualified Prelude
 
 import Types.EmailAddress (EmailAddress)
 import Types.HashedPassword (HashedPassword)
 import Types.NonEmptyText (NonEmptyText)
 import qualified Types.User as Types
+import qualified Types.UUID as UUID
 
 data CreateError
   = DuplicateEmail
@@ -108,7 +107,7 @@ runUserAsSQLite = Polysemy.reinterpret $ \case
 
   List userIDs -> do
     conn <- Input.input
-    Types.findMany conn query params
+    Types.findMany conn query []
 
     where
       query = Prelude.mconcat
@@ -116,14 +115,8 @@ runUserAsSQLite = Polysemy.reinterpret $ \case
         , " "
         , "FROM " <> usersTable
         , " "
-        , "WHERE id IN (:userIDs)"
+        , "WHERE id IN (" <> UUID.idsToQuery userIDs <> ")"
         ]
-      params = [ ":userIDs" := userIDsParam ]
-
-      userIDsParam :: String
-      userIDsParam =
-        Prelude.show <$> userIDs
-          & List.intercalate ", "
 
 usersTable :: Query
 usersTable = "users"

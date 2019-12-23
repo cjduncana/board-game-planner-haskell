@@ -26,6 +26,6 @@ data Query m = Query
 query :: Connection -> NominalDiffTime -> Manager -> Signer -> Query (Res () IO)
 query conn daysLater manager signer = Query
   { boardGames = BoardGame.resolveBoardGames manager
-  , events = Event.resolveEvents conn manager
+  , events = Event.resolveEvents conn manager signer
   , token = Auth.resolveToken conn daysLater signer
   }
