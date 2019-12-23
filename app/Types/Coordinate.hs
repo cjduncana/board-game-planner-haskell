@@ -6,6 +6,7 @@ import Data.Morpheus.Kind (SCALAR)
 import Data.Morpheus.Types
     (GQLScalar(parseValue, serialize), GQLType, KIND, ScalarValue(Float))
 import Database.SQLite.Simple (SQLData(SQLFloat))
+import Database.SQLite.Simple.FromField (FromField(fromField))
 import Database.SQLite.Simple.ToField (ToField(toField))
 import GHC.Generics (Generic)
 
@@ -39,6 +40,9 @@ mkLat = normalize 90 >>> Latitude
 mkLong :: Double -> Longitude
 mkLong = normalize 180 >>> Longitude
 
+instance FromField Latitude where
+  fromField field = Latitude <$> fromField field
+
 instance GQLScalar Latitude where
   parseValue (Float value) =
     realToFrac value
@@ -63,6 +67,9 @@ instance Num Latitude where
 
 instance ToField Latitude where
   toField (Latitude value) = SQLFloat value
+
+instance FromField Longitude where
+  fromField field = Longitude <$> fromField field
 
 instance GQLScalar Longitude where
   parseValue (Float value) =

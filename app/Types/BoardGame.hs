@@ -4,20 +4,23 @@ import qualified Data.Map.Lazy as Map
 import Data.Morpheus.Kind (SCALAR)
 import Data.Morpheus.Types
     (GQLScalar(parseValue, serialize), GQLType, KIND, ScalarValue(Int))
+import Database.SQLite.Simple.FromField (FromField(fromField))
 import Database.SQLite.Simple.ToField (ToField(toField))
 import GHC.Generics (Generic)
 import Prelude
     ( Bool(False)
     , Either(Left, Right)
+    , Eq
     , Int
+    , Ord(compare)
     , Show(show)
-    , maybe
     , ($)
     , (&&)
     , (<$>)
     , (<*>)
     , (==)
     )
+import qualified Prelude
 import Text.XML (Element(Element), Node(NodeElement))
 import Text.XML.Decode.DecodeCursor (DecodeCursor)
 import qualified Text.XML.Decode.DecodeCursor as DecodeCursor
@@ -40,7 +43,7 @@ data BoardGame = BoardGame
   , maximumAmountOfPlayers :: PositiveInteger
   , thumbnailUrl :: NonEmptyText
   , imageUrl :: NonEmptyText
-  } deriving (Generic, GQLType)
+  } deriving (Generic, GQLType, Show)
 
 getID :: BoardGame -> BoardGameID
 getID = id
@@ -67,7 +70,7 @@ namePredicate =
             Element elementName elementAttributes _ = element
             isNameElement = elementName == "name"
             maybeAttr = Map.lookup "type" elementAttributes
-            hasPrimaryType = maybe False ("primary" ==) maybeAttr
+            hasPrimaryType = Prelude.maybe False ("primary" ==) maybeAttr
         _ -> False
     }
 
@@ -76,6 +79,12 @@ instance DecodeCursor BoardGameID where
     BoardGameID <$>
       DecodeCursor.decodeAttr "id" Parsers.parseInt cursor
 
+instance Eq BoardGameID where
+  (BoardGameID id1) == (BoardGameID id2) = id1 == id2
+
+instance FromField BoardGameID where
+  fromField field = BoardGameID <$> fromField field
+
 instance GQLScalar BoardGameID where
   parseValue (Int value) = Right $ BoardGameID value
   parseValue _ = Left "Value should be of type Int"
@@ -83,6 +92,10 @@ instance GQLScalar BoardGameID where
 
 instance GQLType BoardGameID where
   type KIND BoardGameID = SCALAR
+
+instance Ord BoardGameID where
+  compare (BoardGameID id1) (BoardGameID id2) =
+    compare id1 id2
 
 instance Show BoardGameID where
   show (BoardGameID id) = show id

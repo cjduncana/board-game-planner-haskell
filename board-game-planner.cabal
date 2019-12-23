@@ -55,9 +55,12 @@ executable board-game-planner-exe
                   , TypeOperators
                   , TypeFamilies
   default-language: Haskell2010
-  other-modules: Effects.BoardGameGeek
+  other-modules: Args.ListEvents
+               , Effects.BoardGameGeek
                , Effects.CryptoHash
                , Effects.Event
+               , Effects.EventGame
+               , Effects.EventPlayer
                , Effects.User
                , Environment
                , Migration
@@ -71,6 +74,7 @@ executable board-game-planner-exe
                , Types.Coordinate
                , Types.EmailAddress
                , Types.Event
+               , Types.EventID
                , Types.HashedPassword
                , Types.JWT
                , Types.NonEmptyText

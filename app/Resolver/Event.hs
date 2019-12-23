@@ -1,7 +1,13 @@
-module Resolver.Event (CreateEventArgs, resolveCreateEvent) where
+module Resolver.Event
+  ( CreateEventArgs
+  , resolveCreateEvent
+  , resolveEvents
+  ) where
 
+import Control.Category ((>>>))
 import Data.Function ((&))
-import Data.Morpheus.Types (MutRes)
+import qualified Data.List.NonEmpty as NonEmpty
+import Data.Morpheus.Types (MutRes, Res)
 import qualified Data.Morpheus.Types as M
 import Data.Text (Text)
 import Database.SQLite.Simple (Connection)
@@ -9,13 +15,21 @@ import GHC.Generics (Generic)
 import Network.HTTP.Client (Manager)
 import Polysemy (Embed, Member, Members, Sem)
 import qualified Polysemy
+import qualified Polysemy.Embed as Embed
 import qualified Polysemy.Input as Input
+import Polysemy.State (State)
 import qualified Polysemy.State as State
 import Web.JWT (Signer)
 
+import Args.ListEvents (ListEventsArgs)
+import qualified Args.ListEvents as ListEvents
 import Effects.BoardGameGeek (BoardGameGeek)
 import qualified Effects.BoardGameGeek as BoardGameGeek
 import qualified Effects.Event as Effects
+import Effects.EventGame (EventGame)
+import qualified Effects.EventGame as EventGame
+import Effects.EventPlayer (EventPlayer)
+import qualified Effects.EventPlayer as EventPlayer
 import qualified Effects.User
 import Types.BoardGame (BoardGame, BoardGameID)
 import Types.Coordinate (Coordinate, Latitude, Longitude)
@@ -40,12 +54,21 @@ resolveCreateEvent :: Connection -> Manager -> Signer -> CreateEventArgs -> MutR
 resolveCreateEvent conn manager signer CreateEventArgs {token, startTime, latitude, longitude, gameIDs} =
   M.liftEither $
     createEvent signer token startTime (Coordinate.mkCoordinate latitude longitude) gameIDs
-      & BoardGameGeek.runBoardGameGeek
+      & runEventResolvers conn
       & State.evalState manager
-      & Effects.User.runUserAsSQLite
-      & Input.runInputConst conn
-      & Effects.runEventAsSQLite
-      & Input.runInputConst conn
+      & Polysemy.runM
+
+-- Add token validation
+resolveEvents :: Connection -> Manager -> ListEventsArgs -> Res () IO [Event]
+resolveEvents conn manager args =
+  Effects.list
+    (ListEvents.startAfter args)
+    (NonEmpty.nonEmpty =<< ListEvents.byGameIDs args)
+    (NonEmpty.nonEmpty =<< ListEvents.byPlayerIDs args)
+    (ListEvents.byLocationArgs args)
+      & runEventResolvers conn
+      & State.evalState manager
+      & Embed.runEmbedded M.lift
       & Polysemy.runM
 
 createEvent ::
@@ -87,3 +110,19 @@ allGamesExists gameIDs boardGames =
   if length gameIDs /= length boardGames
     then Nothing
     else Just boardGames
+
+runEventResolvers ::
+  Members [State Manager, Embed IO] r
+  => Connection
+  -> Sem (Effects.Event : BoardGameGeek : Effects.User.User : EventGame : EventPlayer : r) a
+  -> Sem r a
+runEventResolvers conn =
+  Effects.runEventAsSQLite
+    >>> Input.runInputConst conn
+    >>> BoardGameGeek.runBoardGameGeek
+    >>> Effects.User.runUserAsSQLite
+    >>> Input.runInputConst conn
+    >>> EventGame.runEventGameAsSQLite
+    >>> Input.runInputConst conn
+    >>> EventPlayer.runEventPlayerAsSQLite
+    >>> Input.runInputConst conn

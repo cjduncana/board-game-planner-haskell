@@ -3,10 +3,13 @@ module Effects.User
   , create
   , findOne
   , findByEmailAddress
+  , list
   , runUserAsSQLite
   ) where
 
 import qualified Control.Exception as Exception
+import Data.Function ((&))
+import qualified Data.List as List
 import qualified Data.Time.Clock as Time
 import Database.SQLite.Simple
     (Connection, Error(ErrorConstraint), NamedParam((:=)), Query, SQLError)
@@ -15,7 +18,7 @@ import Polysemy (Embed, Member, Sem)
 import qualified Polysemy
 import Polysemy.Input (Input)
 import qualified Polysemy.Input as Input
-import Prelude (Either, IO, Maybe(Just, Nothing), ($), (<>))
+import Prelude (Either, IO, Maybe(Just, Nothing), String, ($), (<$>), (<>))
 import qualified Prelude
 
 import Types.EmailAddress (EmailAddress)
@@ -33,6 +36,8 @@ data User m a where
   FindOne :: Types.UserID -> User m (Maybe Types.User)
   -- Find a User by their email address
   FindByEmailAddress :: EmailAddress -> User m (Maybe (Types.User, HashedPassword))
+  -- List all Users by ID
+  List :: [Types.UserID] -> User m [Types.User]
 
 Polysemy.makeSem ''User
 
@@ -79,7 +84,7 @@ runUserAsSQLite = Polysemy.reinterpret $ \case
 
     where
       query = Prelude.mconcat
-        [ "SELECT id, name, email"
+        [ "SELECT id, name, email, hashedPassword"
         , " "
         , "FROM " <> usersTable
         , " "
@@ -100,6 +105,25 @@ runUserAsSQLite = Polysemy.reinterpret $ \case
         , "WHERE email = :email"
         ]
       params = [ ":email" := email ]
+
+  List userIDs -> do
+    conn <- Input.input
+    Types.findMany conn query params
+
+    where
+      query = Prelude.mconcat
+        [ "SELECT id, name, email"
+        , " "
+        , "FROM " <> usersTable
+        , " "
+        , "WHERE id IN (:userIDs)"
+        ]
+      params = [ ":userIDs" := userIDsParam ]
+
+      userIDsParam :: String
+      userIDsParam =
+        Prelude.show <$> userIDs
+          & List.intercalate ", "
 
 usersTable :: Query
 usersTable = "users"

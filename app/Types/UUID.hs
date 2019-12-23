@@ -11,7 +11,8 @@ import Database.SQLite.Simple.Ok (Ok(Errors, Ok))
 import Database.SQLite.Simple.ToField (ToField(toField))
 import Polysemy (Embed, Member, Sem)
 import qualified Polysemy
-import Prelude (IO, Maybe, Show, maybe, (<$>))
+import Prelude (Eq, IO, Maybe, Ord(compare), Show(show), (<$>), (==))
+import qualified Prelude
 
 newtype UUID = UUID UUID.UUID
 
@@ -19,15 +20,6 @@ data UUIDException
   = NotAUUID
   | NotAText
   deriving (Exception, Show)
-
-instance FromField UUID where
-  fromField field =
-    case fieldData field of
-      SQLText text -> maybe (Errors [SomeException NotAUUID]) (UUID >>> Ok) (UUID.fromText text)
-      _ -> Errors [SomeException NotAText]
-
-instance ToField UUID where
-  toField (UUID uuid) = (UUID.toText >>> SQLText) uuid
 
 fromText :: Text -> Maybe UUID
 fromText text = UUID <$> UUID.fromText text
@@ -39,3 +31,25 @@ randomUUID =
 toText :: UUID -> Text
 toText (UUID id) =
   UUID.toText id
+
+instance Eq UUID where
+  (UUID id1) == (UUID id2) = id1 == id2
+
+instance FromField UUID where
+  fromField field =
+    case fieldData field of
+      SQLText text ->
+        Prelude.maybe
+          (Errors [SomeException NotAUUID])
+          (UUID >>> Ok)
+          (UUID.fromText text)
+      _ -> Errors [SomeException NotAText]
+
+instance Ord UUID where
+  compare (UUID id1) (UUID id2) = compare id1 id2
+
+instance Show UUID where
+  show (UUID id) = show id
+
+instance ToField UUID where
+  toField (UUID uuid) = (UUID.toText >>> SQLText) uuid

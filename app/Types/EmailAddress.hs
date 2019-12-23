@@ -22,6 +22,17 @@ data EmailAddressException
   | NotAText
   deriving (Exception, Show)
 
+fromText :: Text -> Either Text EmailAddress
+fromText =
+  Encoding.encodeUtf8
+    >>> Email.validate
+    >>> either (Text.pack >>> Left) (EmailAddress >>> Right)
+
+toText :: EmailAddress -> Text
+toText (EmailAddress email) =
+  Email.toByteString email
+    & Encoding.decodeUtf8
+
 instance FromField EmailAddress where
   fromField field =
     case fieldData field of
@@ -36,16 +47,8 @@ instance GQLScalar EmailAddress where
 instance GQLType EmailAddress where
   type KIND EmailAddress = SCALAR
 
+instance Show EmailAddress where
+  show (EmailAddress email) = show email
+
 instance ToField EmailAddress where
   toField = toText >>> SQLText
-
-fromText :: Text -> Either Text EmailAddress
-fromText =
-  Encoding.encodeUtf8
-    >>> Email.validate
-    >>> either (Text.pack >>> Left) (EmailAddress >>> Right)
-
-toText :: EmailAddress -> Text
-toText (EmailAddress email) =
-  Email.toByteString email
-    & Encoding.decodeUtf8

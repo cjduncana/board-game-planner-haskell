@@ -42,7 +42,7 @@ createEventsTable conn =
       [ "CREATE TABLE IF NOT EXISTS events"
       , " "
       , "( id TEXT PRIMARY KEY NOT NULL"
-      , ", creatorId TEXT NOT NULL"
+      , ", creatorID TEXT NOT NULL"
       , ", startTime TEXT NOT NULL"
       , ", latitude FLOAT NOT NULL"
       , ", longitude FLOAT NOT NULL"
@@ -54,15 +54,15 @@ createEventsTable conn =
     eventsPlayersQuery = mconcat
       [ "CREATE TABLE IF NOT EXISTS eventsPlayers"
       , " "
-      , "( eventId TEXT NOT NULL"
-      , ", playerId TEXT NOT NULL"
+      , "( eventID TEXT NOT NULL"
+      , ", playerID TEXT NOT NULL"
       , ")"
       ]
 
     eventsGamesQuery = mconcat
       [ "CREATE TABLE IF NOT EXISTS eventsGames"
       , " "
-      , "( eventId TEXT NOT NULL"
-      , ", gameId INTEGER NOT NULL"
+      , "( eventID TEXT NOT NULL"
+      , ", gameID INTEGER NOT NULL"
       , ")"
       ]

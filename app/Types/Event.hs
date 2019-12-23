@@ -1,21 +1,42 @@
-module Types.Event (Event, create) where
+module Types.Event
+  ( Event
+  , findMany
+  , getID
+  , newEvent
+  ) where
 
-import Control.Category ((>>>))
 import Data.Function ((&))
-import Data.Morpheus.Kind (SCALAR)
-import Data.Morpheus.Types
-    (GQLScalar(parseValue, serialize), GQLType, KIND, ScalarValue(String))
+import qualified Data.List as List
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
+import qualified Data.Maybe as Maybe
+import Data.Morpheus.Types (GQLType)
+import Data.Set (Set)
+import qualified Data.Set as Set
+import Database.SQLite.Simple (Connection, NamedParam, Query)
+import qualified Database.SQLite.Simple as SQLite
 import GHC.Generics (Generic)
-import Prelude (Either(Left, Right), maybe, ($))
+import Polysemy (Embed, Member, Members, Sem)
+import qualified Polysemy
+import Prelude (IO, Maybe, Ord, ($), (<$>), (<*>))
+import qualified Prelude
 
-import Types.BoardGame (BoardGame)
-import Types.Coordinate (Coordinate)
+import Effects.BoardGameGeek (BoardGameGeek)
+import qualified Effects.BoardGameGeek as BoardGameGeek
+import Effects.EventGame (EventGame)
+import qualified Effects.EventGame as EventGame
+import Effects.EventPlayer (EventPlayer)
+import qualified Effects.EventPlayer as EventPlayer
+import qualified Effects.User as User
+import Types.BoardGame (BoardGame, BoardGameID)
+import qualified Types.BoardGame as BoardGame
+import Types.Coordinate (Coordinate, Latitude, Longitude)
+import qualified Types.Coordinate as Coordinate
+import Types.EventID (EventID)
+import qualified Types.EventID as EventID
 import Types.Time (Time)
-import Types.User (User)
-import Types.UUID (UUID)
-import qualified Types.UUID as UUID
-
-newtype EventID = EventID UUID
+import Types.User (User, UserID)
+import qualified Types.User
 
 data Event = Event
   { id :: EventID
@@ -26,22 +47,112 @@ data Event = Event
   , games :: [BoardGame]
   } deriving (Generic, GQLType)
 
-create :: UUID -> User -> Time -> Coordinate -> [BoardGame] -> Event
-create id creator startTime location games = Event
-  { id = EventID id
-  , creator = creator
-  , startTime = startTime
-  , location = location
-  , players = [creator]
-  , games = games
-  }
+getID :: Event -> EventID
+getID = id
 
-instance GQLScalar EventID where
-  parseValue (String value) =
-    UUID.fromText value
-      & maybe (Left "Value should be a UUID") (EventID >>> Right)
-  parseValue _ = Left "Value should be of type String"
-  serialize (EventID id) = String $ UUID.toText id
+newEvent ::
+  Member (Embed IO) r
+  => User
+  -> Time
+  -> Coordinate
+  -> [BoardGame]
+  -> Sem r Event
+newEvent creator startTime location games =
+  Event
+    <$> EventID.new
+    <*> Prelude.pure creator
+    <*> Prelude.pure startTime
+    <*> Prelude.pure location
+    <*> Prelude.pure []
+    <*> Prelude.pure games
 
-instance GQLType EventID where
-  type KIND EventID = SCALAR
+findMany ::
+  Members [BoardGameGeek, EventGame, EventPlayer, User.User, Embed IO] r
+  => Connection
+  -> Query
+  -> [NamedParam]
+  -> Sem r [Event]
+findMany conn query params = do
+  results <- Polysemy.embed $ SQLite.queryNamed conn query params
+  let (eventIDs, creatorIDs) = gatherIDs results
+  playerIDsInEvents <- EventPlayer.list eventIDs
+  let userIDs = gatherSomeIDs creatorIDs playerIDsInEvents
+  users <- User.list $ Set.toList userIDs
+  gameIDsInEvents <- EventGame.list eventIDs
+  let gameIDs = gatherSomeIDs Set.empty gameIDsInEvents
+  games <- BoardGameGeek.getBoardGames $ Set.toList gameIDs
+  Prelude.pure $
+    buildEvents results playerIDsInEvents gameIDsInEvents users games
+
+buildEvents ::
+  [(EventID, UserID, Time, Latitude, Longitude)]
+  -> Map EventID [UserID]
+  -> Map EventID [BoardGameID]
+  -> [User]
+  -> [BoardGame]
+  -> [Event]
+buildEvents results playerIDsInEvents gameIDsInEvents users games =
+  Maybe.mapMaybe
+    (buildEvent playerIDsInEvents gameIDsInEvents usersPerID gamesPerID)
+    results
+
+  where
+    usersPerID :: Map UserID User
+    usersPerID =
+      List.foldl' (addSomething Types.User.getID) Map.empty users
+
+    gamesPerID :: Map BoardGameID BoardGame
+    gamesPerID =
+      List.foldl' (addSomething BoardGame.getID) Map.empty games
+
+buildEvent ::
+  Map EventID [UserID]
+  -> Map EventID [BoardGameID]
+  -> Map UserID User
+  -> Map BoardGameID BoardGame
+  -> (EventID, UserID, Time, Latitude, Longitude)
+  -> Maybe Event
+buildEvent
+  playerIDsInEvents
+  gameIDsInEvents
+  usersPerID
+  gamesPerID
+  (id, creatorID, startTime, latitude, longitude)
+  =
+    Event
+      <$> Prelude.pure id
+      <*> Map.lookup creatorID usersPerID
+      <*> Prelude.pure startTime
+      <*> Prelude.pure (Coordinate.mkCoordinate latitude longitude)
+      <*> maybePlayers
+      <*> maybeGames
+
+    where
+      maybePlayers :: Maybe [User]
+      maybePlayers =
+        Map.findWithDefault [] id playerIDsInEvents
+          & Prelude.mapM (`Map.lookup` usersPerID)
+
+      maybeGames :: Maybe [BoardGame]
+      maybeGames =
+        Map.findWithDefault [] id gameIDsInEvents
+          & Prelude.mapM (`Map.lookup` gamesPerID)
+
+gatherIDs :: [(EventID, UserID, Time, Latitude, Longitude)] -> ([EventID], Set UserID)
+gatherIDs = List.foldl' addIDs ([], Set.empty)
+
+addIDs :: ([EventID], Set UserID) -> (EventID, UserID, Time, Latitude, Longitude) -> ([EventID], Set UserID)
+addIDs (gatheredEventIDs, gatheredCreatorIDs) (id, creatorID, _, _, _) =
+  (id : gatheredEventIDs, Set.insert creatorID gatheredCreatorIDs)
+
+gatherSomeIDs :: Ord a => Set a -> Map EventID [a] -> Set a
+gatherSomeIDs = Map.foldl' addSomeIDs
+
+addSomeIDs :: Ord a => Set a -> [a] -> Set a
+addSomeIDs idsInSet idsInList =
+  Set.fromList idsInList
+    & Set.union idsInSet
+
+addSomething :: Ord id => (something -> id) -> Map id something -> something -> Map id something
+addSomething fn map something =
+  Map.insert (fn something) something map

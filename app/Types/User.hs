@@ -2,6 +2,7 @@ module Types.User
   ( User
   , UserID
   , encodeJwt
+  , findMany
   , findOne
   , getID
   , getUserIDFromJWT
@@ -24,7 +25,19 @@ import GHC.Generics (Generic)
 import Polysemy (Embed, Member, Sem)
 import qualified Polysemy
 import Prelude
-    (Either(Left, Right), IO, Maybe(Just), ($), (*), (<$>), (<*>), (=<<))
+    ( Either(Left, Right)
+    , Eq
+    , IO
+    , Maybe(Just)
+    , Ord(compare)
+    , Show(show)
+    , ($)
+    , (*)
+    , (<$>)
+    , (<*>)
+    , (=<<)
+    , (==)
+    )
 import qualified Prelude
 import Web.JWT
     ( Algorithm(HS256)
@@ -50,7 +63,7 @@ data User = User
   { id :: UserID
   , name :: NonEmptyText
   , email :: EmailAddress
-  } deriving (Generic, GQLType)
+  } deriving (Generic, GQLType, Show)
 
 getID :: User -> UserID
 getID = id
@@ -68,8 +81,17 @@ findOne conn query params =
       results <- SQLite.queryNamed conn query params
       Prelude.pure (createUserTuple <$> Maybe.listToMaybe results)
 
+findMany :: Member (Embed IO) r => Connection -> Query -> [NamedParam] -> Sem r [User]
+findMany conn query params =
+  Polysemy.embed $ do
+      results <- SQLite.queryNamed conn query params
+      Prelude.pure (createUser <$> results)
+
 createUserTuple :: (UserID, NonEmptyText, EmailAddress, HashedPassword) -> (User, HashedPassword)
 createUserTuple (id, name, email, hashedPassword) = (User id name email, hashedPassword)
+
+createUser :: (UserID, NonEmptyText, EmailAddress) -> User
+createUser (id, name, email) = User id name email
 
 encodeJwt :: NominalDiffTime -> Time -> Signer -> User -> Text
 encodeJwt daysLater now signer user =
@@ -98,6 +120,9 @@ header = Prelude.mempty { alg = Just HS256 }
 manyDaysLater :: NominalDiffTime -> Time -> Time
 manyDaysLater daysLater = Time.addTime (daysLater * Clock.nominalDay)
 
+instance Eq UserID where
+  (UserID id1) == (UserID id2) = id1 == id2
+
 instance FromField UserID where
   fromField field = UserID <$> fromField field
 
@@ -112,6 +137,12 @@ instance GQLScalar UserID where
 
 instance GQLType UserID where
   type KIND UserID = SCALAR
+
+instance Ord UserID where
+  compare (UserID id1) (UserID id2) = compare id1 id2
+
+instance Show UserID where
+  show (UserID id) = show id
 
 instance ToField UserID where
   toField (UserID id) = toField id
