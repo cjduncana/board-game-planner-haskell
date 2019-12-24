@@ -5,7 +5,11 @@ module Effects.Event
   , runEventAsSQLite
   ) where
 
+import Control.Category ((>>>))
+import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NonEmpty
+import qualified Data.Maybe as Maybe
 import qualified Data.Time.Clock as Time
 import Database.SQLite.Simple (Connection, NamedParam((:=)), Query)
 import qualified Database.SQLite.Simple as SQLite
@@ -13,7 +17,7 @@ import Polysemy (Embed, Members, Sem)
 import qualified Polysemy
 import Polysemy.Input (Input)
 import qualified Polysemy.Input as Input
-import Prelude (IO, Maybe, ($), (<>))
+import Prelude (IO, Maybe, ($), (<$>), (<>))
 import qualified Prelude
 
 import Args.ListEvents (ByLocationArgs)
@@ -22,6 +26,7 @@ import Effects.EventGame (EventGame)
 import qualified Effects.EventGame as EventGame
 import Effects.EventPlayer (EventPlayer)
 import qualified Effects.User
+import qualified Migration
 import Types.BoardGame (BoardGame, BoardGameID)
 import Types.Coordinate (Coordinate)
 import qualified Types.Coordinate as Coordinate
@@ -29,6 +34,7 @@ import qualified Types.Event as Types
 import Types.Time (Time)
 import Types.User (User, UserID)
 import qualified Types.User as User
+import qualified Types.UUID as UUID
 
 data Event m a where
   -- Create a new Event
@@ -72,22 +78,52 @@ runEventAsSQLite = Polysemy.reinterpret $ \case
         , ":updatedAt" := now
         ]
 
-  List startAfter _ _ _ -> do
+  List startAfter byGameIDs _ _ -> do
   -- TODO: Implement other parameters
   -- List startAfter byGameIDs byPlayerIDs byLocationArgs ->
     conn <- Input.input
     Types.findMany conn query params
 
     where
+      (innerJoin, filter) = concatenateQueries
+        [limitByGameIDs <$> byGameIDs]
+
       query = Prelude.mconcat
         [ "SELECT id, creatorID, startTime, latitude, longitude"
         , " "
         , "FROM " <> eventsTable
+        , innerJoin
         , " "
-        , "WHERE startTime >= :startAfter"
+        , "WHERE"
+        , " "
+        , "startTime >= :startAfter"
+        , filter
         ]
 
       params = [ ":startAfter" := startAfter ]
+
+limitByGameIDs :: NonEmpty BoardGameID -> (Query, Query)
+limitByGameIDs gameIDs =
+  (innerJoin, filter)
+  where
+    innerJoin = Prelude.mconcat
+      [ "INNER JOIN " <> Migration.eventsGamesTable
+      , " ON "
+      , eventsTable <> ".id"
+      , " = "
+      , Migration.eventsGamesTable <> ".eventID"
+      ]
+    filter =
+      Migration.eventsGamesTable <> ".gameID IN (" <> UUID.idsToQuery (NonEmpty.toList gameIDs) <> ")"
+
+concatenateQueries :: [Maybe (Query, Query)] -> (Query, Query)
+concatenateQueries =
+  Maybe.catMaybes
+    >>> List.foldl' concatenateQuery ("", "")
+
+concatenateQuery :: (Query, Query) -> (Query, Query) -> (Query, Query)
+concatenateQuery (accInnerJoin, accFilter) (innerJoin, filter) =
+  (accInnerJoin <> " " <> innerJoin, accFilter <> " AND " <> filter)
 
 eventsTable :: Query
 eventsTable = "events"

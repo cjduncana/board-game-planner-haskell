@@ -1,7 +1,10 @@
-module Migration (run) where
+module Migration
+  ( eventsGamesTable
+  , run
+  ) where
 
 import Data.Function ((&))
-import Database.SQLite.Simple (Connection)
+import Database.SQLite.Simple (Connection, Query)
 import qualified Database.SQLite.Simple as SQLite
 
 run :: Connection -> IO ()
@@ -60,9 +63,12 @@ createEventsTable conn =
       ]
 
     eventsGamesQuery = mconcat
-      [ "CREATE TABLE IF NOT EXISTS eventsGames"
+      [ "CREATE TABLE IF NOT EXISTS " <> eventsGamesTable
       , " "
       , "( eventID TEXT NOT NULL"
       , ", gameID INTEGER NOT NULL"
       , ")"
       ]
+
+eventsGamesTable :: Query
+eventsGamesTable = "eventsGames"

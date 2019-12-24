@@ -10,7 +10,7 @@ import Data.Function ((&))
 import qualified Data.List as List
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Database.SQLite.Simple (Connection, NamedParam((:=)), Query)
+import Database.SQLite.Simple (Connection, NamedParam((:=)))
 import qualified Database.SQLite.Simple as SQLite
 import Polysemy (Embed, Member, Sem)
 import qualified Polysemy
@@ -19,6 +19,7 @@ import qualified Polysemy.Input as Input
 import Prelude (IO, Maybe(Just, Nothing), ($), (<$>), (<>))
 import qualified Prelude
 
+import qualified Migration
 import Types.BoardGame (BoardGame, BoardGameID)
 import qualified Types.BoardGame as BoardGame
 import Types.EventID (EventID)
@@ -44,7 +45,7 @@ runEventGameAsSQLite = Polysemy.reinterpret $ \case
     where
 
       query = Prelude.mconcat
-        [ "INSERT INTO " <> eventsGamesTable
+        [ "INSERT INTO " <> Migration.eventsGamesTable
         , " "
         , "(eventID, gameID)"
         , " "
@@ -65,13 +66,10 @@ runEventGameAsSQLite = Polysemy.reinterpret $ \case
       query = Prelude.mconcat
         [ "SELECT eventID, gameID"
         , " "
-        , "FROM " <> eventsGamesTable
+        , "FROM " <> Migration.eventsGamesTable
         , " "
         , "WHERE eventID IN (" <> UUID.idsToQuery eventIDs <> ")"
         ]
-
-eventsGamesTable :: Query
-eventsGamesTable = "eventsGames"
 
 groupGameIDsByEventID :: [(EventID, BoardGameID)] -> Map EventID [BoardGameID]
 groupGameIDsByEventID = List.foldl' addGameID Map.empty
