@@ -78,7 +78,7 @@ runEventAsSQLite = Polysemy.reinterpret $ \case
         , ":updatedAt" := now
         ]
 
-  List startAfter byGameIDs _ _ -> do
+  List startAfter byGameIDs byPlayerIDs _ -> do
   -- TODO: Implement other parameters
   -- List startAfter byGameIDs byPlayerIDs byLocationArgs ->
     conn <- Input.input
@@ -86,7 +86,9 @@ runEventAsSQLite = Polysemy.reinterpret $ \case
 
     where
       (innerJoin, filter) = concatenateQueries
-        [limitByGameIDs <$> byGameIDs]
+        [ limitByGameIDs <$> byGameIDs
+        , limitByPlayerIDs <$> byPlayerIDs
+        ]
 
       query = Prelude.mconcat
         [ "SELECT id, creatorID, startTime, latitude, longitude"
@@ -115,6 +117,20 @@ limitByGameIDs gameIDs =
       ]
     filter =
       Migration.eventsGamesTable <> ".gameID IN (" <> UUID.idsToQuery (NonEmpty.toList gameIDs) <> ")"
+
+limitByPlayerIDs :: NonEmpty UserID -> (Query, Query)
+limitByPlayerIDs playerIDs =
+  (innerJoin, filter)
+  where
+    innerJoin = Prelude.mconcat
+      [ "INNER JOIN " <> Migration.eventsPlayersTable
+      , " ON "
+      , eventsTable <> ".id"
+      , " = "
+      , Migration.eventsPlayersTable <> ".eventID"
+      ]
+    filter =
+      Migration.eventsPlayersTable <> ".playerID IN (" <> UUID.idsToQuery (NonEmpty.toList playerIDs) <> ")"
 
 concatenateQueries :: [Maybe (Query, Query)] -> (Query, Query)
 concatenateQueries =

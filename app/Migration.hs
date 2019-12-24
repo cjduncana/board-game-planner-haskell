@@ -1,5 +1,6 @@
 module Migration
   ( eventsGamesTable
+  , eventsPlayersTable
   , run
   ) where
 
@@ -72,3 +73,6 @@ createEventsTable conn =
 
 eventsGamesTable :: Query
 eventsGamesTable = "eventsGames"
+
+eventsPlayersTable :: Query
+eventsPlayersTable = "eventsPlayers"

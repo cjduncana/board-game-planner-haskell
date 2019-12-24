@@ -10,7 +10,7 @@ import Data.Function ((&))
 import qualified Data.List as List
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Database.SQLite.Simple (Connection, NamedParam((:=)), Query)
+import Database.SQLite.Simple (Connection, NamedParam((:=)))
 import qualified Database.SQLite.Simple as SQLite
 import Polysemy (Embed, Member, Sem)
 import qualified Polysemy
@@ -19,6 +19,7 @@ import qualified Polysemy.Input as Input
 import Prelude (IO, Maybe(Just, Nothing), ($), (<$>), (<>))
 import qualified Prelude
 
+import qualified Migration
 import Types.EventID (EventID)
 import Types.User (User, UserID)
 import qualified Types.User as User
@@ -44,17 +45,17 @@ runEventPlayerAsSQLite = Polysemy.reinterpret $ \case
     where
 
       query = Prelude.mconcat
-        [ "INSERT INTO " <> eventsPlayersTable
+        [ "INSERT INTO " <> Migration.eventsPlayersTable
         , " "
-        , "(eventID, gameID)"
+        , "(eventID, playerID)"
         , " "
-        , "VALUES (:eventID, :gameID)"
+        , "VALUES (:eventID, :playerID)"
         ]
 
       params :: User -> [NamedParam]
       params player =
         [ ":eventID" := eventID
-        , ":gameID" := User.getID player
+        , ":playerID" := User.getID player
         ]
 
   List eventIDs -> do
@@ -65,13 +66,10 @@ runEventPlayerAsSQLite = Polysemy.reinterpret $ \case
       query = Prelude.mconcat
         [ "SELECT eventID, playerID"
         , " "
-        , "FROM " <> eventsPlayersTable
+        , "FROM " <> Migration.eventsPlayersTable
         , " "
         , "WHERE eventID IN (" <> UUID.idsToQuery eventIDs <> ")"
         ]
-
-eventsPlayersTable :: Query
-eventsPlayersTable = "eventsPlayers"
 
 groupPlayerIDsByEventID :: [(EventID, UserID)] -> Map EventID [UserID]
 groupPlayerIDsByEventID = List.foldl' addplayerID Map.empty
