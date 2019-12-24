@@ -35,10 +35,10 @@ mkCoordinate :: Latitude -> Longitude -> Coordinate
 mkCoordinate = Coordinate
 
 mkLat :: Double -> Latitude
-mkLat = normalize 90 >>> Latitude
+mkLat = normalize (pi / 2) >>> Latitude
 
 mkLong :: Double -> Longitude
-mkLong = normalize 180 >>> Longitude
+mkLong = normalize pi >>> Longitude
 
 instance FromField Latitude where
   fromField field = Latitude <$> fromField field
