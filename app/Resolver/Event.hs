@@ -35,11 +35,9 @@ import Types.BoardGame (BoardGame, BoardGameID)
 import Types.Coordinate (Coordinate, Latitude, Longitude)
 import qualified Types.Coordinate as Coordinate
 import Types.Event (Event)
-import Types.JWT (JWT)
 import qualified Types.JWT as JWT
 import Types.Time (Time)
-import Types.User (User, UserID)
-import qualified Types.User as User
+import Types.User (UserID)
 
 data CreateEventArgs = CreateEventArgs
   { token :: Text
@@ -80,19 +78,15 @@ createEvent ::
   -> [BoardGameID]
   -> Sem r (Either String Event)
 createEvent signer encodedToken startTime location gameIDs =
-  JWT.use signer encodedToken $ \jwt -> do
-    maybeUser <- findUser jwt
-    case maybeUser of
-      Nothing -> pure $ Left "User not found"
-      Just user -> do
-        maybeBoardGames <- findGames gameIDs
-        case maybeBoardGames of
-          Nothing -> pure $ Left "Board Games not found"
-          Just boardGames ->
-            Right <$> Effects.create user startTime location boardGames
+  JWT.use signer encodedToken $ \user -> do
+    maybeBoardGames <- findGames gameIDs
+    case maybeBoardGames of
+      Nothing -> pure $ Left "Board Games not found"
+      Just boardGames ->
+        Right <$> Effects.create user startTime location boardGames
 
 listEvents ::
-  Members [Embed IO, Effects.Event] r
+  Members [Embed IO, Effects.Event, Effects.User.User] r
   => Signer
   -> Text
   -> Time
@@ -103,12 +97,6 @@ listEvents ::
 listEvents signer encodedToken startAfter byGameIDs byPlayerIDs byLocationArgs =
   JWT.use signer encodedToken $ \_ ->
     Right <$> Effects.list startAfter byGameIDs byPlayerIDs byLocationArgs
-
-findUser :: Member Effects.User.User r => JWT -> Sem r (Maybe User)
-findUser jwt =
-  case User.getUserIDFromJWT jwt of
-    Nothing -> pure Nothing
-    Just userID -> Effects.User.findOne userID
 
 findGames :: Member BoardGameGeek r => [BoardGameID] -> Sem r (Maybe [BoardGame])
 findGames gameIDs =
