@@ -1,0 +1,28 @@
+version: '2'
+services:
+  backend:
+    container_name: board-game-planner-be
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    volumes:
+      - './:/app'
+    ports:
+      - '3000:3000'
+    environment:
+      - DB_USER=root
+      - DB_PASSWORD=board-game-planner
+      - DB_NAME=board-game-planner
+      - DB_HOST=mysql
+    links:
+      - 'mysql'
+    depends_on:
+      - 'mysql'
+  mysql:
+    container_name: database
+    image: 'mysql:5.6.40'
+    ports:
+      - '3306:3306'
+    environment:
+      - MYSQL_ROOT_PASSWORD=board-game-planner
+      - MYSQL_DATABASE=board-game-planner
