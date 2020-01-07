@@ -2,22 +2,19 @@ module Effects.Event
   ( Event
   , create
   , list
-  , runEventAsSQLite
+  , runEventAsMySQL
   ) where
 
-import Control.Category ((>>>))
-import qualified Data.List as List
 import Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NonEmpty
-import qualified Data.Maybe as Maybe
 import qualified Data.Time.Clock as Time
-import Database.SQLite.Simple (Connection, NamedParam((:=)), Query)
-import qualified Database.SQLite.Simple as SQLite
+import Database.MySQL.Simple (Connection, In(In), Only(Only))
+import qualified Database.MySQL.Simple as MySQL
 import Polysemy (Embed, Members, Sem)
 import qualified Polysemy
 import Polysemy.Input (Input)
 import qualified Polysemy.Input as Input
-import Prelude (IO, Maybe, ($), (<$>), (<>))
+import Prelude (IO, Maybe(Just, Nothing), ($), (<>))
 import qualified Prelude
 
 import Args.ListEvents (ByLocationArgs)
@@ -34,7 +31,6 @@ import qualified Types.Event as Types
 import Types.Time (Time)
 import Types.User (User, UserID)
 import qualified Types.User as User
-import qualified Types.UUID as UUID
 
 data Event m a where
   -- Create a new Event
@@ -44,102 +40,137 @@ data Event m a where
 
 Polysemy.makeSem ''Event
 
-runEventAsSQLite ::
+runEventAsMySQL ::
   Members [BoardGameGeek, EventGame, EventPlayer, Effects.User.User, Embed IO] r
   => Sem (Event : r) a
   -> Sem (Input Connection : r) a
-runEventAsSQLite = Polysemy.reinterpret $ \case
+runEventAsMySQL = Polysemy.reinterpret $ \case
 
   Create creator startTime location games -> do
     newEvent <- Types.newEvent creator startTime location games
     let id = Types.getID newEvent
     now <- Polysemy.embed Time.getCurrentTime
     conn <- Input.input
-    Polysemy.embed $ SQLite.executeNamed conn query (params id now)
+    _ <- Polysemy.embed $ MySQL.execute conn query (params id now)
     EventGame.create id games
     Prelude.pure newEvent
 
     where
       query = Prelude.mconcat
-        [ "INSERT INTO " <> eventsTable
+        [ "INSERT INTO " <> Migration.eventsTable
         , " "
         , "(id, creatorID, startTime, latitude, longitude, createdAt, updatedAt)"
         , " "
-        , "VALUES (:id, :creatorID, :startTime, :latitude, :longitude, :createdAt, :updatedAt)"
+        , "VALUES (?, ?, ?, ?, ?, ?, ?)"
         ]
 
       params id now =
-        [ ":id" := id
-        , ":creatorID" := User.getID creator
-        , ":startTime" := startTime
-        , ":latitude" := Coordinate.getLatitude location
-        , ":longitude" := Coordinate.getLongitude location
-        , ":createdAt" := now
-        , ":updatedAt" := now
-        ]
+        ( id
+        , User.getID creator
+        , startTime
+        , Coordinate.getLatitude location
+        , Coordinate.getLongitude location
+        , now
+        , now
+        )
 
-  List startAfter byGameIDs byPlayerIDs _ -> do
   -- TODO: Implement other parameters
-  -- List startAfter byGameIDs byPlayerIDs byLocationArgs ->
+  List startAfter Nothing Nothing _ -> do
     conn <- Input.input
     Types.findMany conn query params
 
     where
-      (innerJoin, filter) = concatenateQueries
-        [ limitByGameIDs <$> byGameIDs
-        , limitByPlayerIDs <$> byPlayerIDs
-        ]
-
       query = Prelude.mconcat
         [ "SELECT id, creatorID, startTime, latitude, longitude"
         , " "
-        , "FROM " <> eventsTable
-        , innerJoin
+        , "FROM " <> Migration.eventsTable
         , " "
         , "WHERE"
         , " "
-        , "startTime >= :startAfter"
-        , filter
+        , "startTime >= ?"
         ]
 
-      params = [ ":startAfter" := startAfter ]
+      params = Only startAfter
 
-limitByGameIDs :: NonEmpty BoardGameID -> (Query, Query)
-limitByGameIDs gameIDs =
-  (innerJoin, filter)
-  where
-    innerJoin = Prelude.mconcat
-      [ "INNER JOIN " <> Migration.eventsGamesTable
-      , " ON "
-      , eventsTable <> ".id"
-      , " = "
-      , Migration.eventsGamesTable <> ".eventID"
-      ]
-    filter =
-      Migration.eventsGamesTable <> ".gameID IN (" <> UUID.idsToQuery (NonEmpty.toList gameIDs) <> ")"
+  List startAfter (Just gameIDs) Nothing _ -> do
+    conn <- Input.input
+    Types.findMany conn query params
 
-limitByPlayerIDs :: NonEmpty UserID -> (Query, Query)
-limitByPlayerIDs playerIDs =
-  (innerJoin, filter)
-  where
-    innerJoin = Prelude.mconcat
-      [ "INNER JOIN " <> Migration.eventsPlayersTable
-      , " ON "
-      , eventsTable <> ".id"
-      , " = "
-      , Migration.eventsPlayersTable <> ".eventID"
-      ]
-    filter =
-      Migration.eventsPlayersTable <> ".playerID IN (" <> UUID.idsToQuery (NonEmpty.toList playerIDs) <> ")"
+    where
+      query = Prelude.mconcat
+        [ "SELECT id, creatorID, startTime, latitude, longitude"
+        , " "
+        , "FROM " <> Migration.eventsTable
+        , " "
+        , "INNER JOIN " <> Migration.eventsGamesTable
+        , " ON "
+        , Migration.eventsTable <> ".id"
+        , " = "
+        , Migration.eventsGamesTable <> ".eventID"
+        , " "
+        , "WHERE"
+        , " "
+        , "startTime >= ?"
+        , " AND "
+        , Migration.eventsGamesTable <> ".gameID IN ?"
+        ]
 
-concatenateQueries :: [Maybe (Query, Query)] -> (Query, Query)
-concatenateQueries =
-  Maybe.catMaybes
-    >>> List.foldl' concatenateQuery ("", "")
+      params = (startAfter, In (NonEmpty.toList gameIDs))
 
-concatenateQuery :: (Query, Query) -> (Query, Query) -> (Query, Query)
-concatenateQuery (accInnerJoin, accFilter) (innerJoin, filter) =
-  (accInnerJoin <> " " <> innerJoin, accFilter <> " AND " <> filter)
+  List startAfter Nothing (Just playerIDs) _ -> do
+    conn <- Input.input
+    Types.findMany conn query params
 
-eventsTable :: Query
-eventsTable = "events"
+    where
+      query = Prelude.mconcat
+        [ "SELECT id, creatorID, startTime, latitude, longitude"
+        , " "
+        , "FROM " <> Migration.eventsTable
+        , " "
+        , "INNER JOIN " <> Migration.eventsPlayersTable
+        , " ON "
+        , Migration.eventsTable <> ".id"
+        , " = "
+        , Migration.eventsPlayersTable <> ".eventID"
+        , " "
+        , "WHERE"
+        , " "
+        , "startTime >= ?"
+        , " AND "
+        , Migration.eventsPlayersTable <> ".playerID IN ?"
+        ]
+
+      params = (startAfter, In (NonEmpty.toList playerIDs))
+
+  List startAfter (Just gameIDs) (Just playerIDs) _ -> do
+    conn <- Input.input
+    Types.findMany conn query params
+
+    where
+      query = Prelude.mconcat
+        [ "SELECT id, creatorID, startTime, latitude, longitude"
+        , " "
+        , "FROM " <> Migration.eventsTable
+        , " "
+        , "INNER JOIN " <> Migration.eventsPlayersTable
+        , " ON "
+        , Migration.eventsTable <> ".id"
+        , " = "
+        , Migration.eventsPlayersTable <> ".eventID"
+        , " "
+        , "INNER JOIN " <> Migration.eventsGamesTable
+        , " ON "
+        , Migration.eventsTable <> ".id"
+        , " = "
+        , Migration.eventsGamesTable <> ".eventID"
+        , " "
+        , "WHERE"
+        , " "
+        , "startTime >= ?"
+        , " AND "
+        , Migration.eventsGamesTable <> ".gameID IN ?"
+        , " AND "
+        , Migration.eventsPlayersTable <> ".playerID IN ?"
+        ]
+
+      params = (startAfter, In (NonEmpty.toList gameIDs), In (NonEmpty.toList playerIDs))

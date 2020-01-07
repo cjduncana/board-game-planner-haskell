@@ -17,10 +17,11 @@ import Data.Morpheus.Types
 import Data.Text (Text)
 import Data.Time.Clock (NominalDiffTime)
 import qualified Data.Time.Clock as Clock
-import Database.SQLite.Simple (Connection, NamedParam, Query)
-import qualified Database.SQLite.Simple as SQLite
-import Database.SQLite.Simple.FromField (FromField(fromField))
-import Database.SQLite.Simple.ToField (ToField(toField))
+import Database.MySQL.Simple (Connection, Query)
+import qualified Database.MySQL.Simple as MySQL
+import Database.MySQL.Simple.Param (Param(render))
+import Database.MySQL.Simple.QueryParams (QueryParams)
+import Database.MySQL.Simple.Result (Result(convert))
 import GHC.Generics (Generic)
 import Polysemy (Embed, Member, Sem)
 import qualified Polysemy
@@ -75,16 +76,26 @@ newUser name email =
     <*> Prelude.pure name
     <*> Prelude.pure email
 
-findOne :: Member (Embed IO) r => Connection -> Query -> [NamedParam] -> Sem r (Maybe (User, HashedPassword))
+findOne ::
+ (Member (Embed IO) r, QueryParams q)
+  => Connection
+  -> Query
+  -> q
+  -> Sem r (Maybe (User, HashedPassword))
 findOne conn query params =
   Polysemy.embed $ do
-      results <- SQLite.queryNamed conn query params
+      results <- MySQL.query conn query params
       Prelude.pure (createUserTuple <$> Maybe.listToMaybe results)
 
-findMany :: Member (Embed IO) r => Connection -> Query -> [NamedParam] -> Sem r [User]
+findMany ::
+ (Member (Embed IO) r, QueryParams q)
+  => Connection
+  -> Query
+  -> q
+  -> Sem r [User]
 findMany conn query params =
   Polysemy.embed $ do
-      results <- SQLite.queryNamed conn query params
+      results <- MySQL.query conn query params
       Prelude.pure (createUser <$> results)
 
 createUserTuple :: (UserID, NonEmptyText, EmailAddress, HashedPassword) -> (User, HashedPassword)
@@ -123,9 +134,6 @@ manyDaysLater daysLater = Time.addTime (daysLater * Clock.nominalDay)
 instance Eq UserID where
   (UserID id1) == (UserID id2) = id1 == id2
 
-instance FromField UserID where
-  fromField field = UserID <$> fromField field
-
 instance GQLScalar UserID where
   parseValue (String value) =
     Prelude.maybe
@@ -141,8 +149,11 @@ instance GQLType UserID where
 instance Ord UserID where
   compare (UserID id1) (UserID id2) = compare id1 id2
 
+instance Param UserID where
+  render (UserID id) = render id
+
+instance Result UserID where
+  convert field = convert field >>> UserID
+
 instance Show UserID where
   show (UserID id) = show id
-
-instance ToField UserID where
-  toField (UserID id) = toField id

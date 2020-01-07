@@ -1,20 +1,17 @@
-module Types.UUID (UUID, idsToQuery, fromText, randomUUID, toText) where
+module Types.UUID (UUID, fromText, randomUUID, toText) where
 
-import Control.Category ((>>>))
-import Control.Exception.Base (Exception, SomeException(SomeException))
-import qualified Data.List as List
+import Control.Exception.Base (Exception)
 import Data.Text (Text)
-import qualified Data.Text as Text
 import qualified Data.UUID as UUID
 import qualified Data.UUID.V4 as UUID
-import Database.SQLite.Simple (Query(Query), SQLData(SQLText))
-import Database.SQLite.Simple.FromField (FromField(fromField), fieldData)
-import Database.SQLite.Simple.Ok (Ok(Errors, Ok))
-import Database.SQLite.Simple.ToField (ToField(toField))
+import Database.MySQL.Simple.Param (Param(render))
+import Database.MySQL.Simple.Result (Result(convert))
 import Polysemy (Embed, Member, Sem)
 import qualified Polysemy
-import Prelude (Eq, IO, Maybe, Ord(compare), Show(show), (<$>), (<>), (==))
+import Prelude (Eq, IO, Maybe, Ord(compare), Show(show), (<$>), (==))
 import qualified Prelude
+
+import qualified Types.Utils as Utils
 
 newtype UUID = UUID UUID.UUID
 
@@ -34,31 +31,21 @@ toText :: UUID -> Text
 toText (UUID id) =
   UUID.toText id
 
-idsToQuery :: Show a => [a] -> Query
-idsToQuery =
-  (<$>) (Prelude.show >>> \id -> "\"" <> id <> "\"")
-    >>> List.intercalate ", "
-    >>> Text.pack
-    >>> Query
-
 instance Eq UUID where
   (UUID id1) == (UUID id2) = id1 == id2
-
-instance FromField UUID where
-  fromField field =
-    case fieldData field of
-      SQLText text ->
-        Prelude.maybe
-          (Errors [SomeException NotAUUID])
-          (UUID >>> Ok)
-          (UUID.fromText text)
-      _ -> Errors [SomeException NotAText]
 
 instance Ord UUID where
   compare (UUID id1) (UUID id2) = compare id1 id2
 
+instance Param UUID where
+  render (UUID id) = render (UUID.toString id)
+
+instance Result UUID where
+  convert field value =
+    Prelude.maybe
+      (Utils.conversionFailed field "UUID" "could not parse")
+      UUID
+      (UUID.fromString (convert field value))
+
 instance Show UUID where
   show (UUID id) = show id
-
-instance ToField UUID where
-  toField (UUID uuid) = (UUID.toText >>> SQLText) uuid

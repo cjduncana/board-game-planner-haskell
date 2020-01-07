@@ -1,7 +1,7 @@
 module Mutation (Mutation, mutation) where
 
 import Data.Morpheus.Types (GQLType, MutRes)
-import Database.SQLite.Simple (Connection)
+import Database.MySQL.Simple (Connection)
 import GHC.Generics (Generic)
 import Network.HTTP.Client (Manager)
 import Web.JWT (Signer)

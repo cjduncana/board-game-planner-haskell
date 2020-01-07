@@ -2,16 +2,16 @@ module Effects.EventGame
   ( EventGame
   , create
   , list
-  , runEventGameAsSQLite
+  , runEventGameAsMySQL
   ) where
 
-import Control.Category ((>>>))
+import qualified Control.Monad as Monad
 import Data.Function ((&))
 import qualified Data.List as List
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Database.SQLite.Simple (Connection, NamedParam((:=)))
-import qualified Database.SQLite.Simple as SQLite
+import Database.MySQL.Simple (Connection, In(In), Only(Only))
+import qualified Database.MySQL.Simple as MySQL
 import Polysemy (Embed, Member, Sem)
 import qualified Polysemy
 import Polysemy.Input (Input)
@@ -23,7 +23,6 @@ import qualified Migration
 import Types.BoardGame (BoardGame, BoardGameID)
 import qualified Types.BoardGame as BoardGame
 import Types.EventID (EventID)
-import qualified Types.UUID as UUID
 
 data EventGame m a where
   -- Tie several Board Games to an Event
@@ -33,13 +32,14 @@ data EventGame m a where
 
 Polysemy.makeSem ''EventGame
 
-runEventGameAsSQLite :: Member (Embed IO) r => Sem (EventGame : r) a -> Sem (Input Connection : r) a
-runEventGameAsSQLite = Polysemy.reinterpret $ \case
+runEventGameAsMySQL :: Member (Embed IO) r => Sem (EventGame : r) a -> Sem (Input Connection : r) a
+runEventGameAsMySQL = Polysemy.reinterpret $ \case
 
   Create eventID games -> do
     conn <- Input.input
-    Prelude.fmap (params >>> SQLite.executeNamed conn query) games
-      & Prelude.mconcat
+    Prelude.fmap params games
+      & MySQL.executeMany conn query
+      & Monad.void
       & Polysemy.embed
 
     where
@@ -49,18 +49,15 @@ runEventGameAsSQLite = Polysemy.reinterpret $ \case
         , " "
         , "(eventID, gameID)"
         , " "
-        , "VALUES (:eventID, :gameID)"
+        , "VALUES (?, ?)"
         ]
 
-      params :: BoardGame -> [NamedParam]
-      params boardGame =
-        [ ":eventID" := eventID
-        , ":gameID" := BoardGame.getID boardGame
-        ]
+      params :: BoardGame -> (EventID, BoardGameID)
+      params boardGame = (eventID, BoardGame.getID boardGame)
 
   List eventIDs -> do
     conn <- Input.input
-    Polysemy.embed (groupGameIDsByEventID <$> SQLite.query_ conn query)
+    Polysemy.embed (groupGameIDsByEventID <$> MySQL.query conn query params)
 
     where
       query = Prelude.mconcat
@@ -68,8 +65,9 @@ runEventGameAsSQLite = Polysemy.reinterpret $ \case
         , " "
         , "FROM " <> Migration.eventsGamesTable
         , " "
-        , "WHERE eventID IN (" <> UUID.idsToQuery eventIDs <> ")"
+        , "WHERE eventID IN ?"
         ]
+      params = Only (In eventIDs)
 
 groupGameIDsByEventID :: [(EventID, BoardGameID)] -> Map EventID [BoardGameID]
 groupGameIDsByEventID = List.foldl' addGameID Map.empty

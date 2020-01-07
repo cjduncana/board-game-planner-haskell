@@ -3,7 +3,7 @@ module Query (Query, query) where
 import Data.Morpheus.Types (GQLType, Res)
 import Data.Text (Text)
 import Data.Time.Clock (NominalDiffTime)
-import Database.SQLite.Simple (Connection)
+import Database.MySQL.Simple (Connection)
 import GHC.Generics (Generic)
 import Network.HTTP.Client (Manager)
 import Web.JWT (Signer)

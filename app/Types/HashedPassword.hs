@@ -1,16 +1,15 @@
 module Types.HashedPassword (HashedPassword, encodePassword, verifyPassword) where
 
 import Control.Category ((>>>))
-import Control.Exception.Base (Exception, SomeException(SomeException))
+import Control.Exception.Base (Exception)
 import Crypto.Argon2 (Argon2Status)
 import qualified Crypto.Argon2 as Argon2
 import Data.ByteString (ByteString)
+import Data.Function ((&))
 import Data.Text.Short (ShortText)
 import qualified Data.Text.Short as Short
-import Database.SQLite.Simple (SQLData(SQLText))
-import Database.SQLite.Simple.FromField (FromField(fromField), fieldData)
-import Database.SQLite.Simple.Ok (Ok(Errors, Ok))
-import Database.SQLite.Simple.ToField (ToField(toField))
+import Database.MySQL.Simple.Param (Param(render))
+import Database.MySQL.Simple.Result (Result(convert))
 
 import Types.Password (Password)
 import qualified Types.Password as Password
@@ -21,15 +20,16 @@ data HashedPasswordException
   = NotAText
   deriving (Exception, Show)
 
-instance FromField HashedPassword where
-  fromField field =
-    case fieldData field of
-      SQLText text -> Ok $ HashedPassword $ Short.fromText text
-      _ -> Errors [SomeException NotAText]
+instance Param HashedPassword where
+  render (HashedPassword hashedPassword) =
+    Short.toText hashedPassword
+      & render
 
-instance ToField HashedPassword where
-  toField (HashedPassword hashedPassword) =
-    (Short.toText >>> SQLText) hashedPassword
+instance Result HashedPassword where
+  convert field =
+    convert field
+      >>> Short.pack
+      >>> HashedPassword
 
 encodePassword :: Password -> ByteString -> Either String HashedPassword
 encodePassword password =

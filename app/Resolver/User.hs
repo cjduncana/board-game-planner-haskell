@@ -6,7 +6,7 @@ module Resolver.User
 import Data.Function ((&))
 import Data.Morpheus.Types (MutRes)
 import qualified Data.Morpheus.Types as M
-import Database.SQLite.Simple (Connection)
+import Database.MySQL.Simple (Connection)
 import GHC.Generics (Generic)
 import Polysemy (Embed, Members, Sem)
 import qualified Polysemy
@@ -31,7 +31,7 @@ resolveCreateUser conn CreateUserArgs {name, email, password} =
   M.liftEither $
     createUser name email password
       & CryptoHash.runCryptoHashAsArgon2
-      & Effects.runUserAsSQLite
+      & Effects.runUserAsMySQL
       & Input.runInputConst conn
       & Polysemy.runM
 

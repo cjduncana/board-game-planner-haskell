@@ -8,8 +8,8 @@ import Data.Morpheus.Types
     (GQLRootResolver(GQLRootResolver), Undefined(Undefined))
 import qualified Data.Morpheus.Types as M
 import Data.Time.Clock (NominalDiffTime)
-import Database.SQLite.Simple (Connection)
-import qualified Database.SQLite.Simple as SQLite
+import Database.MySQL.Simple (Connection)
+import qualified Database.MySQL.Simple as MySQL
 import Network.HTTP.Client (Manager)
 import qualified Network.HTTP.Client.TLS as TLS
 import Web.JWT (Signer)
@@ -27,13 +27,13 @@ main :: IO ()
 main = do
   manager <- TLS.newTlsManager
   env <- Env.getEnvironment
-  SQLite.withConnection (Env.sqliteDatabaseName env) $ \conn -> do
-    Migration.run conn
-    S.scotty 3000 $
-      S.post "/api" $ do
-        body <- S.body
-        response <- Monad.liftIO $ gqlApi conn env manager $ LazyByteString.toStrict body
-        S.raw $ LazyByteString.fromStrict response
+  conn <- MySQL.connect $ Env.connectInfo env
+  Migration.run conn
+  S.scotty 3000 $
+    S.post "/api" $ do
+      body <- S.body
+      response <- Monad.liftIO $ gqlApi conn env manager $ LazyByteString.toStrict body
+      S.raw $ LazyByteString.fromStrict response
 
 gqlApi :: Connection -> Environment -> Manager -> ByteString -> IO ByteString
 gqlApi conn env manager =

@@ -11,7 +11,7 @@ import qualified Data.List.NonEmpty as NonEmpty
 import Data.Morpheus.Types (MutRes, Res)
 import qualified Data.Morpheus.Types as M
 import Data.Text (Text)
-import Database.SQLite.Simple (Connection)
+import Database.MySQL.Simple (Connection)
 import GHC.Generics (Generic)
 import Network.HTTP.Client (Manager)
 import Polysemy (Embed, Member, Members, Sem)
@@ -115,12 +115,12 @@ runEventResolvers ::
   -> Sem (Effects.Event : BoardGameGeek : Effects.User.User : EventGame : EventPlayer : r) a
   -> Sem r a
 runEventResolvers conn =
-  Effects.runEventAsSQLite
+  Effects.runEventAsMySQL
     >>> Input.runInputConst conn
     >>> BoardGameGeek.runBoardGameGeek
-    >>> Effects.User.runUserAsSQLite
+    >>> Effects.User.runUserAsMySQL
     >>> Input.runInputConst conn
-    >>> EventGame.runEventGameAsSQLite
+    >>> EventGame.runEventGameAsMySQL
     >>> Input.runInputConst conn
-    >>> EventPlayer.runEventPlayerAsSQLite
+    >>> EventPlayer.runEventPlayerAsMySQL
     >>> Input.runInputConst conn

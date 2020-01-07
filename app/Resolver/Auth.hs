@@ -8,7 +8,7 @@ import Data.Morpheus.Types (Res)
 import qualified Data.Morpheus.Types as M
 import Data.Text (Text)
 import Data.Time.Clock (NominalDiffTime)
-import Database.SQLite.Simple (Connection)
+import Database.MySQL.Simple (Connection)
 import GHC.Generics (Generic)
 import Polysemy (Embed, Members, Sem)
 import qualified Polysemy
@@ -37,7 +37,7 @@ resolveToken conn daysLater signer TokenArgs {email, password} =
     token daysLater email password
       & CryptoHash.runCryptoHashAsArgon2
       & State.evalState signer
-      & User.runUserAsSQLite
+      & User.runUserAsMySQL
       & Input.runInputConst conn
       & Polysemy.runM
 

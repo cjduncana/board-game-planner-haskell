@@ -10,8 +10,8 @@ import Data.Time.Calendar (Day(ModifiedJulianDay, toModifiedJulianDay))
 import Data.Time.Clock (NominalDiffTime, UTCTime(UTCTime, utctDay, utctDayTime))
 import qualified Data.Time.Clock as Time
 import qualified Data.Time.Format.ISO8601 as TimeFormat
-import Database.SQLite.Simple.FromField (FromField(fromField))
-import Database.SQLite.Simple.ToField (ToField(toField))
+import Database.MySQL.Simple.Param (Param(render))
+import Database.MySQL.Simple.Result (Result(convert))
 import Polysemy (Embed, Member, Sem)
 import qualified Polysemy
 import Web.JWT (NumericDate)
@@ -38,9 +38,6 @@ getNow :: Member (Embed IO) r => Sem r Time
 getNow =
   Time <$> Polysemy.embed Time.getCurrentTime
 
-instance FromField Time where
-  fromField field = Time <$> fromField field
-
 instance GQLScalar Time where
   parseValue (String value) =
     Text.unpack value
@@ -55,8 +52,11 @@ instance GQLScalar Time where
 instance GQLType Time where
   type KIND Time = SCALAR
 
+instance Param Time where
+  render (Time time) = render time
+
+instance Result Time where
+  convert field = convert field >>> Time
+
 instance Show Time where
   show (Time time) = show time
-
-instance ToField Time where
-  toField (Time time) = toField time

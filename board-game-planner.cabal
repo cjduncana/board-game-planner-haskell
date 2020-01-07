@@ -28,10 +28,11 @@ executable board-game-planner-exe
                   , http-client-tls
                   , jwt
                   , morpheus-graphql
+                  , mysql
+                  , mysql-simple
                   , polysemy
                   , polysemy-plugin
                   , scotty
-                  , sqlite-simple
                   , text-short
                   , text
                   , time
@@ -81,8 +82,9 @@ executable board-game-planner-exe
                , Types.Password
                , Types.PositiveInteger
                , Types.Time
-               , Types.UUID
                , Types.User
+               , Types.Utils
+               , Types.UUID
 
 test-suite board-game-planner-test
   type:                exitcode-stdio-1.0

@@ -13,8 +13,9 @@ import qualified Data.Maybe as Maybe
 import Data.Morpheus.Types (GQLType)
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Database.SQLite.Simple (Connection, NamedParam, Query)
-import qualified Database.SQLite.Simple as SQLite
+import Database.MySQL.Simple (Connection, Query)
+import qualified Database.MySQL.Simple as MySQL
+import Database.MySQL.Simple.QueryParams (QueryParams)
 import GHC.Generics (Generic)
 import Polysemy (Embed, Member, Members, Sem)
 import qualified Polysemy
@@ -67,13 +68,13 @@ newEvent creator startTime location games =
     <*> Prelude.pure games
 
 findMany ::
-  Members [BoardGameGeek, EventGame, EventPlayer, User.User, Embed IO] r
+  (Members [BoardGameGeek, EventGame, EventPlayer, User.User, Embed IO] r, QueryParams q)
   => Connection
   -> Query
-  -> [NamedParam]
+  -> q
   -> Sem r [Event]
 findMany conn query params = do
-  results <- Polysemy.embed $ SQLite.queryNamed conn query params
+  results <- Polysemy.embed $ MySQL.query conn query params
   let (eventIDs, creatorIDs) = gatherIDs results
   playerIDsInEvents <- EventPlayer.list eventIDs
   let userIDs = gatherSomeIDs creatorIDs playerIDsInEvents

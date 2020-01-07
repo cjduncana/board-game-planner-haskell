@@ -10,10 +10,10 @@ services:
     ports:
       - '3000:3000'
     environment:
+      - DB_HOST=mysql
       - DB_USER=root
       - DB_PASSWORD=board-game-planner
-      - DB_NAME=board-game-planner
-      - DB_HOST=mysql
+      - DB_NAME=board_game_planner
     links:
       - 'mysql'
     depends_on:
@@ -25,4 +25,4 @@ services:
       - '3306:3306'
     environment:
       - MYSQL_ROOT_PASSWORD=board-game-planner
-      - MYSQL_DATABASE=board-game-planner
+      - MYSQL_DATABASE=board_game_planner

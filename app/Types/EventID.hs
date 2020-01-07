@@ -5,8 +5,8 @@ import Data.Function ((&))
 import Data.Morpheus.Kind (SCALAR)
 import Data.Morpheus.Types
     (GQLScalar(parseValue, serialize), GQLType, KIND, ScalarValue(String))
-import Database.SQLite.Simple.FromField (FromField(fromField))
-import Database.SQLite.Simple.ToField (ToField(toField))
+import Database.MySQL.Simple.Param (Param(render))
+import Database.MySQL.Simple.Result (Result(convert))
 import Polysemy (Embed, Member, Sem)
 import Prelude
     (Either(Left, Right), Eq, IO, Ord(compare), Show(show), ($), (<$>), (==))
@@ -23,9 +23,6 @@ new = EventID <$> UUID.randomUUID
 instance Eq EventID where
   (EventID id1) == (EventID id2) = id1 == id2
 
-instance FromField EventID where
-  fromField field = EventID <$> fromField field
-
 instance GQLScalar EventID where
   parseValue (String value) =
     UUID.fromText value
@@ -39,8 +36,11 @@ instance GQLType EventID where
 instance Ord EventID where
   compare (EventID id1) (EventID id2) = compare id1 id2
 
+instance Param EventID where
+  render (EventID id) = render id
+
+instance Result EventID where
+  convert field = convert field >>> EventID
+
 instance Show EventID where
   show (EventID id) = show id
-
-instance ToField EventID where
-  toField (EventID id) = toField id

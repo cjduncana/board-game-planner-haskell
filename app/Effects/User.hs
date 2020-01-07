@@ -4,26 +4,27 @@ module Effects.User
   , findOne
   , findByEmailAddress
   , list
-  , runUserAsSQLite
+  , runUserAsMySQL
   ) where
 
 import qualified Control.Exception as Exception
 import qualified Data.Time.Clock as Time
-import Database.SQLite.Simple
-    (Connection, Error(ErrorConstraint), NamedParam((:=)), Query, SQLError)
-import qualified Database.SQLite.Simple as SQLite
+import Database.MySQL.Base (MySQLError)
+import qualified Database.MySQL.Base as MySQL
+import Database.MySQL.Simple (Connection, In(In), Only(Only))
+import qualified Database.MySQL.Simple as MySQL
 import Polysemy (Embed, Member, Sem)
 import qualified Polysemy
 import Polysemy.Input (Input)
 import qualified Polysemy.Input as Input
-import Prelude (Either, IO, Maybe(Just, Nothing), ($), (<>))
+import Prelude (Either, IO, Maybe(Just, Nothing), ($), (<>), (==))
 import qualified Prelude
 
+import qualified Migration
 import Types.EmailAddress (EmailAddress)
 import Types.HashedPassword (HashedPassword)
 import Types.NonEmptyText (NonEmptyText)
 import qualified Types.User as Types
-import qualified Types.UUID as UUID
 
 data CreateError
   = DuplicateEmail
@@ -40,8 +41,8 @@ data User m a where
 
 Polysemy.makeSem ''User
 
-runUserAsSQLite :: Member (Embed IO) r => Sem (User : r) a -> Sem (Input Connection : r) a
-runUserAsSQLite = Polysemy.reinterpret $ \case
+runUserAsMySQL :: Member (Embed IO) r => Sem (User : r) a -> Sem (Input Connection : r) a
+runUserAsMySQL = Polysemy.reinterpret $ \case
 
   Create name email hashedPassword -> do
     newUser <- Types.newUser name email
@@ -49,32 +50,27 @@ runUserAsSQLite = Polysemy.reinterpret $ \case
     conn <- Input.input
     userResult <- Polysemy.embed $
       Exception.tryJust
-        (\(e :: SQLError) ->
-          case SQLite.sqlError e of
-            ErrorConstraint -> Just DuplicateEmail
-            _ -> Nothing
-          )
-        (SQLite.executeNamed conn query $ params newUser now)
+        (\(e :: MySQLError) ->
+          if MySQL.errNumber e == 1062 then
+            Just DuplicateEmail
+          else
+            Nothing
+        )
+        (MySQL.execute conn query $ params newUser now)
     Prelude.pure $ Prelude.fmap
       (Prelude.const newUser)
       userResult
 
     where
       query = Prelude.mconcat
-        [ "INSERT INTO " <> usersTable
+        [ "INSERT INTO " <> Migration.usersTable
         , " "
         , "(id, name, email, hashedPassword, createdAt, updatedAt)"
         , " "
-        , "VALUES (:id, :name, :email, :hashedPassword, :createdAt, :updatedAt)"
+        , "VALUES (?, ?, ?, ?, ?, ?)"
         ]
       params newUser now =
-        [ ":id" := Types.getID newUser
-        , ":name" := name
-        , ":email" := email
-        , ":hashedPassword" := hashedPassword
-        , ":createdAt" := now
-        , ":updatedAt" := now
-        ]
+        (Types.getID newUser, name, email, hashedPassword, now, now)
 
   FindOne id -> do
     conn <- Input.input
@@ -85,11 +81,11 @@ runUserAsSQLite = Polysemy.reinterpret $ \case
       query = Prelude.mconcat
         [ "SELECT id, name, email, hashedPassword"
         , " "
-        , "FROM " <> usersTable
+        , "FROM " <> Migration.usersTable
         , " "
-        , "WHERE id = :id"
+        , "WHERE id = ?"
         ]
-      params = [ ":id" := id ]
+      params = Only id
 
   FindByEmailAddress email -> do
     conn <- Input.input
@@ -99,24 +95,22 @@ runUserAsSQLite = Polysemy.reinterpret $ \case
       query = Prelude.mconcat
         [ "SELECT id, name, email, hashedPassword"
         , " "
-        , "FROM " <> usersTable
+        , "FROM " <> Migration.usersTable
         , " "
-        , "WHERE email = :email"
+        , "WHERE email = ?"
         ]
-      params = [ ":email" := email ]
+      params = Only email
 
   List userIDs -> do
     conn <- Input.input
-    Types.findMany conn query []
+    Types.findMany conn query params
 
     where
       query = Prelude.mconcat
         [ "SELECT id, name, email"
         , " "
-        , "FROM " <> usersTable
+        , "FROM " <> Migration.usersTable
         , " "
-        , "WHERE id IN (" <> UUID.idsToQuery userIDs <> ")"
+        , "WHERE id IN ?"
         ]
-
-usersTable :: Query
-usersTable = "users"
+      params = Only (In userIDs)
