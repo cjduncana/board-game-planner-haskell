@@ -1,15 +1,18 @@
 module Args.ListEvents
-  ( ByLocationArgs
+  ( ByLocation
   , ListEventsArgs
   , byGameIDs
-  , byLocationArgs
+  , byLocation
   , byPlayerIDs
+  , distanceInKm
+  , latitude
+  , longitude
   , startAfter
   , token
   ) where
 
 import Data.Morpheus.Kind (INPUT)
-import Data.Morpheus.Types (GQLType, KIND)
+import Data.Morpheus.Types (GQLType(description), KIND)
 import Data.Text (Text)
 import GHC.Generics (Generic)
 
@@ -25,14 +28,15 @@ data ListEventsArgs = ListEventsArgs
   , startAfter :: Time
   , byGameIDs :: Maybe [BoardGameID]
   , byPlayerIDs :: Maybe [UserID]
-  , byLocationArgs :: Maybe ByLocationArgs
+  , byLocation :: Maybe ByLocation
   } deriving (Generic)
 
-data ByLocationArgs = ByLocationArgs
+data ByLocation = ByLocation
   { latitude :: Latitude
   , longitude :: Longitude
   , distanceInKm :: Int
   } deriving (Generic)
 
-instance GQLType ByLocationArgs where
-  type KIND ByLocationArgs = INPUT
+instance GQLType ByLocation where
+  type KIND ByLocation = INPUT
+  description _ = Just "List Events near a Location"

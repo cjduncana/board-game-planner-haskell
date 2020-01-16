@@ -21,7 +21,7 @@ import Polysemy.State (State)
 import qualified Polysemy.State as State
 import Web.JWT (Signer)
 
-import Args.ListEvents (ByLocationArgs, ListEventsArgs)
+import Args.ListEvents (ByLocation, ListEventsArgs)
 import qualified Args.ListEvents as ListEvents
 import Effects.BoardGameGeek (BoardGameGeek)
 import qualified Effects.BoardGameGeek as BoardGameGeek
@@ -64,7 +64,7 @@ resolveEvents conn manager signer args =
       (ListEvents.startAfter args)
       (NonEmpty.nonEmpty =<< ListEvents.byGameIDs args)
       (NonEmpty.nonEmpty =<< ListEvents.byPlayerIDs args)
-      (ListEvents.byLocationArgs args)
+      (ListEvents.byLocation args)
         & runEventResolvers conn
         & State.evalState manager
         & Polysemy.runM
@@ -92,11 +92,11 @@ listEvents ::
   -> Time
   -> Maybe (NonEmpty BoardGameID)
   -> Maybe (NonEmpty UserID)
-  -> Maybe ByLocationArgs
+  -> Maybe ByLocation
   -> Sem r (Either String [Event])
-listEvents signer encodedToken startAfter byGameIDs byPlayerIDs byLocationArgs =
+listEvents signer encodedToken startAfter byGameIDs byPlayerIDs byLocation =
   JWT.use signer encodedToken $ \_ ->
-    Right <$> Effects.list startAfter byGameIDs byPlayerIDs byLocationArgs
+    Right <$> Effects.list startAfter byGameIDs byPlayerIDs byLocation
 
 findGames :: Member BoardGameGeek r => [BoardGameID] -> Sem r (Maybe [BoardGame])
 findGames gameIDs =
